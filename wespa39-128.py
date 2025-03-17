@@ -1,5 +1,8 @@
 import math
+import os
 import serial
+import sys
+import win32print
 import tkinter as ttk
 from tkinter import font
 
@@ -44,9 +47,33 @@ def resetLaser():
     print("Resetting Laser...")
 
 
-def printLabel(isEnabled):
+def printLabel(isEnabled, labelData):
     if isEnabled == "normal":
         print("Printing Label...")
+        #Now how to parse label data? String delimited by newlines would be easiest...
+
+
+
+
+        #Going to try and dump a label from the printer to a file on the production machine.
+        #Format is gonna be something like this; very simple once I get the config right.
+        ##Turn this into a formatted string and plop in our own data!
+        raw_label=bytes("^XA^CF0,45^FO30,25^FDCut To Length^FS^FO30,70^FD12ft 0.2in^FS^FO30,115^FD4m 66.2cm^FS^XZ", "utf-8")
+        #Luckily this will be a Windows machine! Do:
+        #os.startfile(raw_label "print")
+        printer = win32print.GetDefaultPrinter()
+        try:
+            printJob = win32print.StartDocPrinter(printer, 1, ("Label", None, "RAW"))
+            try:
+                win32print.StartPagePrinter(printJob)
+                win32print.WritePrinter(printJob, raw_label)
+                win32print.EndPagePrinter(printJob)
+            finally:
+                win32print.EndDocPrinter(printJob)
+        finally:
+            win32print.EndDocPrinter(printJob)
+        win32print.ClosePrinter(printer)
+
 
 
 class MainMenu:
@@ -58,9 +85,11 @@ class MainMenu:
     offByVal = 0.0
     minTolerance = 0.1 #Fill this in from config file?
     maxTolerance = 6.0 #Fill this in from config file?
-    allowPrint = "disabled"
     toleranceIndicatorVal = "Outside Tolerance"
     toleranceColorVal = "red"
+    
+    allowPrint = "disabled"
+    printLabelText = "Cut To Length"
 
     lbl_workOrderVal = None
     lbl_lengthVal = None
@@ -78,7 +107,7 @@ class MainMenu:
         self.updateGUI()
         
 
-    #Call this once a bardcode has been detected and as the laser refreshes. Update the GUI with the new information.
+    #Call this once a bardcode has been detected or as the laser refreshes. Update the GUI with the new information.
     def updateGUI(self):
         print(f"Updating GUI. Barcode: {self.currentBarcode}; Laser Length: {self.tableLength}")
 
@@ -139,9 +168,7 @@ class MainMenu:
             self.scannerInput += event.char  # Append the character to the input string
 
     def __init__(self, root):
-        #Could of course make the window size a config item...
-
-        content = ttk.Frame(root, width=1500, height=900)
+        content = ttk.Frame(root, width=900, height=600)
         content.grid(column=0, row=0, columnspan=5, rowspan=6)
 
         for i in range (0, 5):
