@@ -188,30 +188,28 @@ class MainMenu:
         btn_resetLaser.bind('<Button-1>', lambda event: resetLaser())
         
         lbl_tableLength = ttk.Label(content, text="TABLE LENGTH:", justify="left", font=medium_font)
-        lbl_tableLength.grid(column=0, row=2, columnspan=2, padx=5, pady=5, sticky="W")
+        lbl_tableLength.grid(column=0, row=2, columnspan=2, padx=50, pady=5)
 
-        self.lbl_tableLengthBox = ttk.Label(content, text=decInchesToFtIn(self.tableLength), justify="left", font=large_font, background="white", relief="solid")
-        self.lbl_tableLengthBox.grid(column=0, row=3, columnspan=2, padx=5, pady=5, sticky="W")
+        self.lbl_tableLengthBox = ttk.Label(content, text=decInchesToFtIn(self.tableLength), justify="left", width=12, font=large_font, background="white", relief="solid")
+        self.lbl_tableLengthBox.grid(column=0, row=3, columnspan=2, padx=5, pady=5)
 
-        #Could make 3 more labels for the relevant stats...
+        lbl_offBy = ttk.Label(content, text="OFF BY:", justify="center", font=medium_font)
+        lbl_offBy.grid(column=2, row=2, columnspan=1, padx=5, pady=5)
 
-        lbl_offBy = ttk.Label(content, text="OFF BY:", justify="left", font=medium_font)
-        lbl_offBy.grid(column=2, row=2, columnspan=1, padx=5, pady=5, sticky="W")
+        self.lbl_offByBox = ttk.Label(content, text=decInchesToFtIn(self.offByVal), justify="left", width=12, font=large_font, background="white", relief="solid")
+        self.lbl_offByBox.grid(column=2, row=3, columnspan=1, padx=5, pady=5,sticky="W") 
 
-        self.lbl_offByBox = ttk.Label(content, text=decInchesToFtIn(self.offByVal), justify="left", font=xl_font, background="white", relief="solid")
-        self.lbl_offByBox.grid(column=2, row=3, columnspan=1, padx=5, pady=5, sticky="W")
+        lbl_orderLength = ttk.Label(content, text="ORDER LENGTH:", justify="center", font=medium_font)
+        lbl_orderLength.grid(column=3, row=2, columnspan=2, padx=5, pady=5)
 
-        lbl_orderLength = ttk.Label(content, text="ORDER LENGTH:", justify="left", font=medium_font)
-        lbl_orderLength.grid(column=3, row=2, columnspan=2, padx=5, pady=5, sticky="E")
-
-        self.lbl_orderLengthBox = ttk.Label(content, text=decInchesToFtIn(self.orderLength), justify="right", font=xl_font, background="white", relief="solid")
+        self.lbl_orderLengthBox = ttk.Label(content, text=decInchesToFtIn(self.orderLength), justify="right", width=12, font=large_font, background="white", relief="solid")
         self.lbl_orderLengthBox.grid(column=3, row=3, columnspan=2, padx=5, pady=5, sticky="E")
 
         self.lbl_toleranceIndicator = ttk.Label(content, text=self.toleranceIndicatorVal, background=self.toleranceColorVal, font=xl_font)
-        self.lbl_toleranceIndicator.grid(column=1, row=4, columnspan=3, padx=5, pady=5, sticky="S")
+        self.lbl_toleranceIndicator.grid(column=1, row=4, columnspan=3, padx=5, pady=5)
         
         self.btn_print = ttk.Button(content, text="PRINT\n(spacebar)", font=small_bold_font)
-        self.btn_print.grid(column=2, row=5, rowspan=1, padx=5, pady=5, sticky="S")
+        self.btn_print.grid(column=2, row=5, rowspan=1, padx=5, pady=5)
         self.btn_print.bind("<Button-1>", lambda event: printLabel(self.allowPrint))
         self.btn_print.configure(state=self.allowPrint)
         
