@@ -45,37 +45,66 @@ def decInchesToFtIn(dec_inches):
     
 def resetLaser():
     print("Resetting Laser...")
+    ##Send a LF followed by LO after a short delay
 
+def parseError(err):
+    match err:
+        case "E15": return err + ": Sensor slow to respond"
+        case "E16": return err + ": Too much target reflectance"
+        case "E17": return err + ": Too much ambient light"
+        case "E18": return err + ": DX mode: Measured greater than specified range"
+        case "E19": return err + ": DX mode: Target speed > 10m/s"
+        case "E23": return err + ": Temp below 14F"
+        case "E24": return err + ": Temp above 140F"
+        case "E31": return err + ": Faulty memory hardware, EEPROM error"
+        case "E51": return err + ": High ambient light or hardware error"
+        case "E52": return err + ": Faulty laser diode"
+        case "E53": return err + ": EEPROM parameter not set (or divide by zero error)"
+        case "E54": return err + ": Hardware error (PLL)"
+        case "E55": return err + ": Hardware error"
+        case "E61": return err + ": Invalid serial command"
+        case "E62": return err + ": Hardware error or Parity error in serial settings"
+        case "E63": return err + ": SIO Overflow"
+        case "E64": return err + ": Framing - error SIO"
 
-def printLabel(isEnabled, labelData):
+    #Either return nothing or a generic error, depending on how I want to handle it in the GUI
+    return ""
+        
+
+def printLabel(isEnabled, desiredLength, actualLength, tolerance, offset, workOrder):
     if isEnabled == "normal":
         print("Printing Label...")
-        #Now how to parse label data? String delimited by newlines would be easiest...
+        #Format is gonna be something like this; very simple once I get the config right.        
+        raw_label = "^XA"
+        raw_label += "^CFA,25"
+        raw_label += "^FO20,20^FDWO#" + workOrder + ":   " + decInchesToFtIn(desiredLength) + "^FS"
+        raw_label += "^FO20,55^FDProduced:  " + decInchesToFtIn(actualLength) + "^FS"
+        raw_label += "^FO20,90^FDTolerance: " + decInchesToFtIn(tolerance) + "^FS"
+        raw_label += "^FO20,125^FDOff by:   " + decInchesToFtIn(offset) + "^FS"
+        raw_label += "^XZ"
 
-
-
-
-        #Going to try and dump a label from the printer to a file on the production machine.
-        #Format is gonna be something like this; very simple once I get the config right.
         ##Turn this into a formatted string and plop in our own data!
-        raw_label=bytes("^XA^CF0,45^FO30,25^FDCut To Length^FS^FO30,70^FD12ft 0.2in^FS^FO30,115^FD4m 66.2cm^FS^XZ", "utf-8")
-        #Luckily this will be a Windows machine! Do:
+        labelBytes=bytes(raw_label, "utf-8")
+        
         #os.startfile(raw_label "print")
+        #The only flaw here is that the default printer must be selected in Windows.
+        #Eventually I'll add a menu option for printer selection, but get it working first.
         printer = win32print.GetDefaultPrinter()
         try:
             printJob = win32print.StartDocPrinter(printer, 1, ("Label", None, "RAW"))
             try:
                 win32print.StartPagePrinter(printJob)
-                win32print.WritePrinter(printJob, raw_label)
+                win32print.WritePrinter(printJob, labelBytes)
                 win32print.EndPagePrinter(printJob)
             finally:
                 win32print.EndDocPrinter(printJob)
         finally:
             win32print.EndDocPrinter(printJob)
         win32print.ClosePrinter(printer)
+        print("Label Printed!")
+    return
 
-
-
+#Main class for the GUI
 class MainMenu:
     scannerInput = "" #Barcode scanner input
     currentBarcode = "" #Last barcode scanned - delimited by newlines with the scanner
@@ -90,6 +119,7 @@ class MainMenu:
     
     allowPrint = "disabled"
     printLabelText = "Cut To Length"
+    lastErrorCode = ""
 
     lbl_workOrderVal = None
     lbl_lengthVal = None
@@ -97,6 +127,7 @@ class MainMenu:
     lbl_tableLengthBox = None
     lbl_offByBox = None
     lbl_orderLengthBox = None
+    lbl_errorCode = None
     
     btn_print = None
 
@@ -108,10 +139,11 @@ class MainMenu:
         
 
     #Call this once a bardcode has been detected or as the laser refreshes. Update the GUI with the new information.
+    #Also run if error codes are detected.
     def updateGUI(self):
         print(f"Updating GUI. Barcode: {self.currentBarcode}; Laser Length: {self.tableLength}")
 
-        self.orderVal = ""
+        self.orderVal = "    "
         self.orderLength = 0.0
         
         #Until Line128 is used, Work Order won't be in the barcode - be sure to code for it not being there.
@@ -147,6 +179,9 @@ class MainMenu:
         self.lbl_tableLengthBox.config(text=decInchesToFtIn(self.tableLength))
         self.lbl_offByBox.config(text=decInchesToFtIn(self.offByVal))
         self.lbl_orderLengthBox.config(text=decInchesToFtIn(self.orderLength))
+        self.lastErrorCode = parseError()
+        #TODO
+        self.lbl_errorCode.config(text=self.lastErrorCode)
 
         self.lbl_workOrderVal.update()
         self.lbl_lengthVal.update()
@@ -155,6 +190,7 @@ class MainMenu:
         self.lbl_tableLengthBox.update()
         self.lbl_offByBox.update()
         self.lbl_orderLengthBox.update()
+        self.lbl_errorCode.update()
 
         print(f"Order Length: {self.orderLength}, Order Value: {self.orderVal}")
 
@@ -169,12 +205,12 @@ class MainMenu:
 
     def __init__(self, root):
         content = ttk.Frame(root, width=900, height=600)
-        content.grid(column=0, row=0, columnspan=5, rowspan=6)
+        content.grid(column=0, row=0, columnspan=5, rowspan=7)
 
         for i in range (0, 5):
             root.columnconfigure(i, weight=3)
 
-        for i in range (0, 6):
+        for i in range (0, 7):
             root.rowconfigure(i, weight=2)
 
         root.resizable(width=False, height=False)
@@ -237,8 +273,11 @@ class MainMenu:
         
         self.btn_print = ttk.Button(content, text="PRINT\n(spacebar)", font=small_bold_font)
         self.btn_print.grid(column=2, row=5, rowspan=1, padx=5, pady=5)
-        self.btn_print.bind("<Button-1>", lambda event: printLabel(self.allowPrint))
+        self.btn_print.bind("<Button-1>", lambda event: printLabel(self.allowPrint, self.orderLength, self.tableLength, self.offByVal, self.minTolerance, self.orderVal))
         self.btn_print.configure(state=self.allowPrint)
+
+        self.lbl_errorCode = ttk.Label(content, text=self.lastErrorCode, font=small_bold_font)
+        self.lbl_errorCode.grid(column=0, row=6, columnspan=2, padx=5, pady=5)
         
 
 
