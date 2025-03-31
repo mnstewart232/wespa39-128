@@ -84,21 +84,29 @@ def printLabel(isEnabled, desiredLength, actualLength, tolerance, offset, workOr
 
         ##Turn this into a formatted string and plop in our own data!
         labelBytes=bytes(raw_label, "utf-8")
-        
+
         #os.startfile(raw_label "print")
         #The only flaw here is that the default printer must be selected in Windows.
         #Eventually I'll add a menu option for printer selection, but get it working first.
         printer = win32print.GetDefaultPrinter()
+        print("Default Printer: " + printer)
         try:
+            print("Starting print job...")
             printJob = win32print.StartDocPrinter(printer, 1, ("Label", None, "RAW"))
             try:
+                print("Starting page...")
                 win32print.StartPagePrinter(printJob)
+                print("Writing label bytes...")
                 win32print.WritePrinter(printJob, labelBytes)
+                print("Ending page...")
                 win32print.EndPagePrinter(printJob)
             finally:
+                print("Ending print job...")
                 win32print.EndDocPrinter(printJob)
         finally:
+            print("Finally ending print job...")
             win32print.EndDocPrinter(printJob)
+        print("Closing printer...")
         win32print.ClosePrinter(printer)
         print("Label Printed!")
     return
@@ -198,6 +206,7 @@ class MainMenu:
         print(f"Order Length: {self.orderLength}, Order Value: {self.orderVal}")
         return
 
+    #Send an off / on signal to the laser.
     def resetLaser(self):
         print("Resetting Laser...")
         ##Send a LF followed by LO after a short delay
@@ -212,6 +221,7 @@ class MainMenu:
             # So readlines and see if it lists commands (ID) - really any response other than an error code or timeout (6 seconds).
             rl = ""
             rl = self.laserObject.readline().toString()
+            print(f"Laser response: {rl}")
             if (rl.startswith("E")):
                 self.laserStatusString = parseErrorString(rl)
 
@@ -225,18 +235,18 @@ class MainMenu:
 
     # Run this after the GUI inits. Establish serial communication.
     def setupLaser(self):
-        self.laserObject = serial.Serial(self.laserComPort, baudrate=9600, timeout=10)
-        self.laserObject.write_timeout = 1
-        if self.laserObject.isOpen():
-            print()
+        try:
+            self.laserObject = serial.Serial(self.laserComPort, baudrate=9600, timeout=10)
+            self.laserObject.write_timeout = 1
             self.laserStatusString = "Laser connected on " + self.laserComPort
-        else:
-            self.laserStatusString = "Laser not connected - check connection and configuration."
+        except: 
+            self.laserStatusString = "Laser not found on " + self.laserComPort + " - check connection and configuration."
 
         return
 
     def getLaserLength(self):
         #Manual override key is g - ideally we do this every half second or so.
+        print("Getting laser length (DM)...")
         try:
             self.laserObject.write(b'DM\n') #Send the command to get the length
             time.sleep(0.5) #Wait for the laser to respond
@@ -251,7 +261,6 @@ class MainMenu:
         self.updateGUI()
         return 
 
-
     #Deals with keyboard input from the barcode scanner.
     def captureInput(self, event):
         if event.keysym == 'Return':
@@ -264,6 +273,7 @@ class MainMenu:
 
     ##Set up GUI elements here.
     def __init__(self, root):
+        print("Initializing GUI...")
         content = ttk.Frame(root, width=900, height=600)
         content.grid(column=0, row=0, columnspan=5, rowspan=7)
 
@@ -342,6 +352,8 @@ class MainMenu:
 
         self.lbl_errorCode = ttk.Label(content, text=self.laserStatusString, font=smaller_font)
         self.lbl_errorCode.grid(column=0, row=6, columnspan=1, padx=5, pady=5)
+
+        print("GUI Initialized!")
         
 
 
