@@ -204,7 +204,6 @@ class MainMenu:
         # Try using ascii("LF\n") to send the LF and LO commands if a string literal doesn't work.
         try:
             self.laserObject.write(b'LF\n')
-            ##self.btn_resetLaser.configure(state="disabled")
             time.sleep(0.5) #Wait for the laser to reset
             self.laserObject.write(b'LO\n')
             print("Checking for laser response...")
@@ -220,6 +219,7 @@ class MainMenu:
             print("Laser reset timed out.")
             self.laserStatusString = "Laser reset failed."
 
+        
         self.updateGUI()
         return
 
