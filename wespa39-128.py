@@ -1,7 +1,6 @@
 import math
-import os
+import time
 import serial
-import sys
 import win32print
 import tkinter as ttk
 from tkinter import font
@@ -43,11 +42,11 @@ def decInchesToFtIn(dec_inches):
     else:   
         return "{0} IN".format(inches)
     
-def resetLaser():
-    print("Resetting Laser...")
-    ##Send a LF followed by LO after a short delay
+def metersToDecFt(meters):
+    return meters * 3.28084
 
-def parseError(err):
+def parseErrorString(err: str):
+    print(f"Parsing error string: {err}")
     match err:
         case "E15": return err + ": Sensor slow to respond"
         case "E16": return err + ": Too much target reflectance"
@@ -110,16 +109,20 @@ class MainMenu:
     currentBarcode = "" #Last barcode scanned - delimited by newlines with the scanner
     orderVal = "" #First 4 digits of a line128 barcode
     orderLength = 0.0 #line39 code, or the remaining digits of a line128
-    tableLength = 123.51 #Fill this in from laser scanner
+    tableLength = 0.0 #Fill this in from laser scanner
     offByVal = 0.0
-    minTolerance = 0.1 #Fill this in from config file?
-    maxTolerance = 6.0 #Fill this in from config file?
+
+    minTolerance = 0.1 #Fill this in from config file
+    maxTolerance = 6.0 #Fill this in from config file
     toleranceIndicatorVal = "Outside Tolerance"
     toleranceColorVal = "red"
     
     allowPrint = "disabled"
     printLabelText = "Cut To Length"
-    lastErrorCode = ""
+    laserStatusString = ""
+    
+    laserObject = None #Gets initialized in setupLaser()
+    laserComPort = "COM5" #Fill this in from config file
 
     lbl_workOrderVal = None
     lbl_lengthVal = None
@@ -130,13 +133,14 @@ class MainMenu:
     lbl_errorCode = None
     
     btn_print = None
+    btn_resetLaser = None
 
     def clear(self):
         print("Clearing Barcodes...")
         self.scannerInput = ""
         self.currentBarcode = ""
         self.updateGUI()
-        
+        return
 
     #Call this once a bardcode has been detected or as the laser refreshes. Update the GUI with the new information.
     #Also run if error codes are detected.
@@ -154,6 +158,7 @@ class MainMenu:
             self.orderLength = float(self.currentBarcode[4:]).__round__(2)
         elif(self.currentBarcode != ""):
             #If we get here and the barcode isn't empty, it's probably a valid Line39 code.
+            #TODO: more proof testing on 128 codes once a proper scanner is available.
             self.orderLength = float(self.currentBarcode).__round__(2)
 
         self.offByVal = self.tableLength - self.orderLength
@@ -179,9 +184,7 @@ class MainMenu:
         self.lbl_tableLengthBox.config(text=decInchesToFtIn(self.tableLength))
         self.lbl_offByBox.config(text=decInchesToFtIn(self.offByVal))
         self.lbl_orderLengthBox.config(text=decInchesToFtIn(self.orderLength))
-        self.lastErrorCode = parseError()
-        #TODO
-        self.lbl_errorCode.config(text=self.lastErrorCode)
+        self.lbl_errorCode.config(text=self.laserStatusString)
 
         self.lbl_workOrderVal.update()
         self.lbl_lengthVal.update()
@@ -193,7 +196,63 @@ class MainMenu:
         self.lbl_errorCode.update()
 
         print(f"Order Length: {self.orderLength}, Order Value: {self.orderVal}")
+        return
 
+    def resetLaser(self):
+        print("Resetting Laser...")
+        ##Send a LF followed by LO after a short delay
+        # Try using ascii("LF\n") to send the LF and LO commands if a string literal doesn't work.
+        try:
+            self.laserObject.write(b'LF\n')
+            ##self.btn_resetLaser.configure(state="disabled")
+            time.sleep(0.5) #Wait for the laser to reset
+            self.laserObject.write(b'LO\n')
+            print("Checking for laser response...")
+            #Verify the connection, but how?
+            # Apparently ID command gets sent on laser auto-start (per setttings dump), some 30 lines.
+            # So readlines and see if it lists commands (ID) - really any response other than an error code or timeout (6 seconds).
+            rl = ""
+            rl = self.laserObject.readline().toString()
+            if (rl.startswith("E")):
+                self.laserStatusString = parseErrorString(rl)
+
+        except serial.SerialTimeoutException:
+            print("Laser reset timed out.")
+            self.laserStatusString = "Laser reset failed."
+
+        self.updateGUI()
+        return
+
+    # Run this after the GUI inits. Establish serial communication.
+    def setupLaser(self):
+        self.laserObject = serial.Serial(self.laserComPort, baudrate=9600, timeout=10)
+        self.laserObject.write_timeout = 1
+        if self.laserObject.isOpen():
+            print()
+            self.laserStatusString = "Laser connected on " + self.laserComPort
+        else:
+            self.laserStatusString = "Laser not connected - check connection and configuration."
+
+        return
+
+    def getLaserLength(self):
+        #Manual override key is g - ideally we do this every half second or so.
+        try:
+            self.laserObject.write(b'DM\n') #Send the command to get the length
+            time.sleep(0.5) #Wait for the laser to respond
+            re = self.laserObject.readline()
+            print(f"Laser response: {re}")
+            #Laser is by default configured to return in meters, so convert to decimal feet-inches.
+            self.tableLength = metersToDecFt(float(re.decode('utf-8').strip()))
+        except serial.SerialTimeoutException:
+            print("Laser read timed out.")
+            self.laserStatusString = "Laser read failed."
+
+        self.updateGUI()
+        return 
+
+
+    #Deals with keyboard input from the barcode scanner.
     def captureInput(self, event):
         if event.keysym == 'Return':
             print(f"Received input: {self.scannerInput}")
@@ -203,6 +262,7 @@ class MainMenu:
         elif (event.char >= '0' and event.char <= '9' or event.char == '.'):
             self.scannerInput += event.char  # Append the character to the input string
 
+    ##Set up GUI elements here.
     def __init__(self, root):
         content = ttk.Frame(root, width=900, height=600)
         content.grid(column=0, row=0, columnspan=5, rowspan=7)
@@ -218,10 +278,12 @@ class MainMenu:
 
         # Bind keyboard shortcuts; also detect barcode input
         root.bind('<x>', lambda event: self.clear())
-        root.bind('<l>', lambda event: resetLaser())
+        root.bind('<l>', lambda event: self.resetLaser())
+        root.bind('<g>', lambda event: self.getLaserLength())
         root.bind('<space>', lambda event: printLabel(self.allowPrint))
         root.bind('<Key>', self.captureInput)
         
+        smaller_font = font.Font(size=14)
         small_bold_font = font.Font(size=18, weight="bold")
         medium_font = font.Font(size=24)
         large_font = font.Font(size=36)
@@ -246,9 +308,9 @@ class MainMenu:
         btn_clear.grid(column=3, row=0, rowspan=2)
         btn_clear.bind('<Button-1>', lambda event: self.clear())
 
-        btn_resetLaser = ttk.Button(content, text="RESET LASER (L)", font=small_bold_font)
-        btn_resetLaser.grid(column=4, row=0, rowspan=2)
-        btn_resetLaser.bind('<Button-1>', lambda event: resetLaser())
+        self.btn_resetLaser = ttk.Button(content, text="RESET LASER (L)", font=small_bold_font)
+        self.btn_resetLaser.grid(column=4, row=0, rowspan=2)
+        self.btn_resetLaser.bind('<Button-1>', lambda event: self.resetLaser())
         
         lbl_tableLength = ttk.Label(content, text="TABLE LENGTH:", justify="left", font=medium_font)
         lbl_tableLength.grid(column=0, row=2, columnspan=2, padx=50, pady=5)
@@ -276,8 +338,10 @@ class MainMenu:
         self.btn_print.bind("<Button-1>", lambda event: printLabel(self.allowPrint, self.orderLength, self.tableLength, self.offByVal, self.minTolerance, self.orderVal))
         self.btn_print.configure(state=self.allowPrint)
 
-        self.lbl_errorCode = ttk.Label(content, text=self.lastErrorCode, font=small_bold_font)
-        self.lbl_errorCode.grid(column=0, row=6, columnspan=2, padx=5, pady=5)
+        self.setupLaser()
+
+        self.lbl_errorCode = ttk.Label(content, text=self.laserStatusString, font=smaller_font)
+        self.lbl_errorCode.grid(column=0, row=6, columnspan=1, padx=5, pady=5)
         
 
 
