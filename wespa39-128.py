@@ -1,6 +1,7 @@
 import math
 import time
 import serial
+import os, sys
 import win32print
 import tkinter as ttk
 from tkinter import font
@@ -71,44 +72,46 @@ def parseErrorString(err: str):
         
 
 def printLabel(isEnabled, desiredLength, actualLength, tolerance, offset, workOrder):
-    if isEnabled == "normal":
-        print("Printing Label...")
-        #Format is gonna be something like this; very simple once I get the config right.        
-        raw_label = "^XA"
-        raw_label += "^CFA,25"
-        raw_label += "^FO20,20^FDWO#" + workOrder + ":   " + decInchesToFtIn(desiredLength) + "^FS"
-        raw_label += "^FO20,55^FDProduced:  " + decInchesToFtIn(actualLength) + "^FS"
-        raw_label += "^FO20,90^FDTolerance: " + decInchesToFtIn(tolerance) + "^FS"
-        raw_label += "^FO20,125^FDOff by:   " + decInchesToFtIn(offset) + "^FS"
-        raw_label += "^XZ"
+    #if isEnabled == "normal":
+    print("Printing Label...")
+    #Format is gonna be something like this; very simple once I get the config right.        
+    raw_label = "^XA"
+    raw_label += "^CFA,25"
+    raw_label += "^FO20,20^FDWO#" + workOrder + ":   " + decInchesToFtIn(desiredLength) + "^FS"
+    raw_label += "^FO20,55^FDProduced:  " + decInchesToFtIn(actualLength) + "^FS"
+    raw_label += "^FO20,90^FDTolerance: " + decInchesToFtIn(tolerance) + "^FS"
+    raw_label += "^FO20,125^FDOff by:   " + decInchesToFtIn(offset) + "^FS"
+    raw_label += "^XZ"
 
-        ##Turn this into a formatted string and plop in our own data!
-        labelBytes=bytes(raw_label, "utf-8")
+    ##Turn this into a formatted string and plop in our own data!
+    labelBytes=bytes(raw_label, "utf-8")
 
-        #os.startfile(raw_label "print")
-        #The only flaw here is that the default printer must be selected in Windows.
-        #Eventually I'll add a menu option for printer selection, but get it working first.
-        printer = win32print.GetDefaultPrinter()
-        print("Default Printer: " + printer)
+    #os.startfile(raw_label "print")
+    #The only flaw here is that the default printer must be selected in Windows.
+    #Eventually I'll add a menu option for printer selection, but get it working first.
+    dPrinter = win32print.GetDefaultPrinter()
+    mPrinter = win32print.OpenPrinter(dPrinter)
+    print("Default Printer: " + dPrinter)
+    try:
+        print("Starting print job...")
+        #Invalid handle?
+        printJob = win32print.StartDocPrinter(mPrinter, 1, ("label", None, "RAW"))
         try:
-            print("Starting print job...")
-            printJob = win32print.StartDocPrinter(printer, 1, ("Label", None, "RAW"))
-            try:
-                print("Starting page...")
-                win32print.StartPagePrinter(printJob)
-                print("Writing label bytes...")
-                win32print.WritePrinter(printJob, labelBytes)
-                print("Ending page...")
-                win32print.EndPagePrinter(printJob)
-            finally:
-                print("Ending print job...")
-                win32print.EndDocPrinter(printJob)
+            print("Starting page...")
+            win32print.StartPagePrinter(printJob)
+            print("Writing label bytes...")
+            win32print.WritePrinter(printJob, labelBytes)
+            print("Ending page...")
+            win32print.EndPagePrinter(printJob)
         finally:
-            print("Finally ending print job...")
+            print("Ending print job...")
             win32print.EndDocPrinter(printJob)
-        print("Closing printer...")
-        win32print.ClosePrinter(printer)
-        print("Label Printed!")
+    finally:
+        print("Finally ending print job...")
+        win32print.EndDocPrinter(printJob)
+    print("Closing printer...")
+    win32print.ClosePrinter(mPrinter)
+    print("Label Printed!")
     return
 
 #Main class for the GUI
@@ -125,7 +128,7 @@ class MainMenu:
     toleranceIndicatorVal = "Outside Tolerance"
     toleranceColorVal = "red"
     
-    allowPrint = "disabled"
+    allowPrint = "normal"
     printLabelText = "Cut To Length"
     laserStatusString = ""
     
