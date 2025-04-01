@@ -130,7 +130,7 @@ class MainMenu:
     laserStatusString = ""
     
     laserObject = None #Gets initialized in setupLaser()
-    laserComPort = "COM5" #Fill this in from config file
+    laserComPort = "COM3" #Fill this in from config file
 
     lbl_workOrderVal = None
     lbl_lengthVal = None
