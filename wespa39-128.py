@@ -1,7 +1,6 @@
 import math
 import time
 import serial
-import os, sys
 import win32print
 import tkinter as ttk
 from tkinter import font
@@ -25,13 +24,11 @@ from tkinter import font
     #Laser On/Off toggle buttons
     #Clear button to refresh info from inputs (X button on keyboard)
     #Print button toggled by spacebar; disable if measurements not within tolerance
-    
-    
-        
 #Libraries:
     #Pyinstaller for compiling to a single exe
     #tkinter for GUI
     #pyserial for COM IO
+    #win32print for printer handling
 
 #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
 def decInchesToFtIn(dec_inches):
@@ -94,21 +91,20 @@ def printLabel(isEnabled, desiredLength, actualLength, tolerance, offset, workOr
     print("Default Printer: " + dPrinter)
     try:
         print("Starting print job...")
-        #Invalid handle?
         printJob = win32print.StartDocPrinter(mPrinter, 1, ("label", None, "RAW"))
         try:
             print("Starting page...")
-            win32print.StartPagePrinter(printJob)
+            win32print.StartPagePrinter(mPrinter)
             print("Writing label bytes...")
-            win32print.WritePrinter(printJob, labelBytes)
+            win32print.WritePrinter(mPrinter, labelBytes)
             print("Ending page...")
-            win32print.EndPagePrinter(printJob)
+            win32print.EndPagePrinter(mPrinter)
         finally:
             print("Ending print job...")
-            win32print.EndDocPrinter(printJob)
+            win32print.EndDocPrinter(mPrinter)
     finally:
         print("Finally ending print job...")
-        win32print.EndDocPrinter(printJob)
+        win32print.EndDocPrinter(mPrinter)
     print("Closing printer...")
     win32print.ClosePrinter(mPrinter)
     print("Label Printed!")
@@ -248,7 +244,7 @@ class MainMenu:
         return
 
     def getLaserLength(self):
-        #Manual override key is g - ideally we do this every half second or so.
+        #Manual override key is g - ideally we do this every half second or so, or set continuous read mode on init.
         print("Getting laser length (DM)...")
         try:
             self.laserObject.write(b'DM\n') #Send the command to get the length
