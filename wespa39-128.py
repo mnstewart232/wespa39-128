@@ -31,7 +31,7 @@ from tkinter import font
     #win32print for printer handling
 
 #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
-def decInchesToFtIn(dec_inches):
+def decInchesToFtIn(dec_inches: float):
     feet = math.trunc(dec_inches/12)
     inches = format(dec_inches - feet * 12, '.2f')
 
@@ -40,8 +40,14 @@ def decInchesToFtIn(dec_inches):
     else:   
         return "{0} IN".format(inches)
     
-def metersToDecFt(meters):
-    return meters * 3.28084
+def metersToFtIn(meters: float):
+    decIn = meters * 39.3701 #Convert meters to inches, then to decimal feet-inches
+    feet = math.trunc(decIn/12)
+    inches = format(decIn - feet * 12, '.2f')
+    if (feet > 0):
+        return "{0} FT {1} IN".format(feet, inches)
+    else:
+        return "{0} IN".format(inches)
 
 def parseErrorString(err: str):
     print(f"Parsing error string: {err}")
@@ -69,6 +75,9 @@ def parseErrorString(err: str):
         
 
 def printLabel(isEnabled, desiredLength, actualLength, tolerance, offset, workOrder):
+    #https://timgolden.me.uk/python/win32_how_do_i/print.html
+
+    #TODO: Be sure to un-comment isEnabled in release version!
     #if isEnabled == "normal":
     print("Printing Label...")
     #Format is gonna be something like this; very simple once I get the config right.        
@@ -251,8 +260,8 @@ class MainMenu:
             time.sleep(0.5) #Wait for the laser to respond
             re = self.laserObject.readline()
             print(f"Laser response: {re}")
-            #Laser is by default configured to return in meters, so convert to decimal feet-inches.
-            self.tableLength = metersToDecFt(float(re.decode('utf-8').strip()))
+            #Laser is by default configured to return in meters, so convert to decimal inches
+            self.tableLength = metersToFtIn(float(re.decode('utf-8').strip()))
         except serial.SerialTimeoutException:
             print("Laser read timed out.")
             self.laserStatusString = "Laser read failed."
