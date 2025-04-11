@@ -32,6 +32,9 @@ from tkinter import font
 
 #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
 def decInchesToFtIn(dec_inches: float):
+    if (dec_inches == None):
+        return "0.00 IN"
+
     feet = math.trunc(dec_inches/12)
     inches = format(dec_inches - feet * 12, '.2f')
 
@@ -83,40 +86,36 @@ def printLabel(isEnabled, desiredLength, actualLength, tolerance, offset, workOr
     #Format is gonna be something like this; very simple once I get the config right.        
     raw_label = "^XA"
     raw_label += "^CFA,25"
-    raw_label += "^FO20,20^FDWO#" + workOrder + ":   " + decInchesToFtIn(desiredLength) + "^FS"
-    raw_label += "^FO20,55^FDProduced:  " + decInchesToFtIn(actualLength) + "^FS"
-    raw_label += "^FO20,90^FDTolerance: " + decInchesToFtIn(tolerance) + "^FS"
-    raw_label += "^FO20,125^FDOff by:   " + decInchesToFtIn(offset) + "^FS"
+    raw_label += "^FO5,5^FDWO#" + workOrder + ":   " + decInchesToFtIn(desiredLength) + "^FS"
+    raw_label += "^FO5,30^FDProduced:  " + decInchesToFtIn(actualLength) + "^FS"
+    raw_label += "^FO5,55^FDTolerance: " + decInchesToFtIn(tolerance) + "^FS"
+    raw_label += "^FO5,80^FDOff by:   " + decInchesToFtIn(offset) + "^FS"
     raw_label += "^XZ"
 
     ##Turn this into a formatted string and plop in our own data!
     labelBytes=bytes(raw_label, "utf-8")
-
-    #os.startfile(raw_label "print")
+    print("Label Bytes: " + str(labelBytes))
     #The only flaw here is that the default printer must be selected in Windows.
     #Eventually I'll add a menu option for printer selection, but get it working first.
-    dPrinter = win32print.GetDefaultPrinter()
-    mPrinter = win32print.OpenPrinter(dPrinter)
-    print("Default Printer: " + dPrinter)
+    defaultPrinter = win32print.GetDefaultPrinter()
+    myPrinter = win32print.OpenPrinter(defaultPrinter)
+    print("Default Printer: " + defaultPrinter)
     try:
         print("Starting print job...")
-        printJob = win32print.StartDocPrinter(mPrinter, 1, ("label", None, "RAW"))
-        try:
-            print("Starting page...")
-            win32print.StartPagePrinter(mPrinter)
-            print("Writing label bytes...")
-            win32print.WritePrinter(mPrinter, labelBytes)
-            print("Ending page...")
-            win32print.EndPagePrinter(mPrinter)
-        finally:
-            print("Ending print job...")
-            win32print.EndDocPrinter(mPrinter)
+        printJob = win32print.StartDocPrinter(myPrinter, 1, ("label", None, "RAW"))
+        print("Starting page...")
+        win32print.StartPagePrinter(myPrinter)
+        print("Writing label bytes...")
+        win32print.WritePrinter(myPrinter, labelBytes)
+        print("Ending page...")
+        win32print.EndPagePrinter(myPrinter)
+        print("Ending print job...")
+        win32print.EndDocPrinter(myPrinter)
+    except Exception as e:
+        print(f"Error printing label: {e}")
     finally:
-        print("Finally ending print job...")
-        win32print.EndDocPrinter(mPrinter)
-    print("Closing printer...")
-    win32print.ClosePrinter(mPrinter)
-    print("Label Printed!")
+        print("Finally, Closing printer...")
+        win32print.ClosePrinter(myPrinter)
     return
 
 #Main class for the GUI
