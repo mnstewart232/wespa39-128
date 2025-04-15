@@ -63,6 +63,9 @@ def parseErrorString(err: str):
         case "E62": return err + ": Hardware error or Parity error in serial settings"
         case "E63": return err + ": SIO Overflow"
         case "E64": return err + ": Framing - error SIO"
+        case "LO": return err + ": Laser is on"
+        case "LF": return err + ": Laser is off"
+        case '': return "No response from laser."
 
     #Either return nothing or a generic error, depending on how I want to handle it in the GUI
     return ""     
@@ -210,33 +213,35 @@ class MainMenu:
 
     #Send an off / on signal to the laser.
     def resetLaser(self):
+        if (self.laserObject.is_open == False):
+            self.laserStatusString = "Laser not connected."
+            print("Laser not connected.")
+            return
+
         print("Resetting Laser...")
         ##Send a LF followed by LO after a short delay
         # Try using ascii("LF\n") to send the LF and LO commands if a string literal doesn't work.
         try:
-            print("Writing LF")
+            print("Writing LF (laser off)")
             self.laserObject.write(b'LF\r\n')
-            print("Waiting")
-            time.sleep(0.5) #Wait for the laser to reset
-            print("Writing LO")
+            print("Checking laser response...")
+            rl = str(self.laserObject.readline()).strip()
+            self.laserStatusString = parseErrorString(rl)
+            print(f"Laser response: {rl}")
+            time.sleep(1) #Wait for the laser to reset
+            self.laserObject.flush()
+            print("Writing LO (laser on)")
             self.laserObject.write(b'LO\r\n')
             print("Checking laser response...")
-            rl = str(self.laserObject.readline())
+            rl = str(self.laserObject.readline()).strip()
             print(f"Laser response: {rl}")
-            if (rl.startswith("E")):
-                self.laserStatusString = parseErrorString(rl)
-            elif (rl == b'LF\r\n'):
-                self.laserStatusString = "Laser is off."
-            elif(rl == b'LO\r\n'):
-                self.laserStatusString = "Laser is on."
-            elif(rl == b''):
-                self.laserStatusString = "Laser offline."
+            self.laserStatusString = parseErrorString(rl)
         except serial.SerialTimeoutException:
             print("Laser reset timed out.")
             self.laserStatusString = "Laser offline."
 
         print("Flushing buffer...")
-        self.laserObject.flush #Clear the input buffer to avoid reading old data
+        self.laserObject.flush() #Clear the input buffer to avoid reading old data
         self.updateGUI()
         return
 
@@ -260,6 +265,11 @@ class MainMenu:
             print(f"Laser read timed out: {e}")
 
     def getLaserLength(self):
+        if (self.laserObject.is_open is False):
+            self.laserStatusString = "Laser not connected."
+            print("Laser not connected.")
+            return
+        
         #Manual override key is g - ideally we do this every half second or so, or set continuous read mode on init.
         print("Getting laser length (DM)...")
         try:
@@ -272,7 +282,8 @@ class MainMenu:
             print("Laser read timed out.")
             self.laserStatusString = "Laser offline."
         except ValueError:
-            print("Non-numeric value received from laser; setting to 0.")
+            self.laserStatusString = parseErrorString(str(re).strip())
+            print("Non-numeric value received from laser.")
             self.tableLength = 0.0
 
         print("Flushing buffer...")
@@ -299,8 +310,8 @@ class MainMenu:
         for i in range (0, 5):
             root.columnconfigure(i, weight=3)
 
-        #for i in range (0, 7):
-        #    root.rowconfigure(i, weight=2)
+        for i in range (0, 7):
+            root.rowconfigure(i, weight=2)
 
         root.resizable(width=False, height=False)
         root.title("WESPA 39-128")
@@ -309,7 +320,10 @@ class MainMenu:
         root.bind('<x>', lambda event: self.clear())
         root.bind('<l>', lambda event: self.resetLaser())
         root.bind('<g>', lambda event: self.getLaserLength())
-        root.bind('<space>', lambda event: printLabel(self.allowPrint, self.orderLength, self.tableLength, self.offByVal, self.minTolerance, self.orderVal))
+        root.bind('<space>', lambda event: printLabel(
+            isEnabled=self.allowPrint, orderLength=self.orderLength,
+              tableLength=self.tableLength, offset=self.offByVal,
+                tolerance=self.minTolerance, workOrder=self.orderVal))
         root.bind('<Key>', self.captureInput)
         
         smaller_font = font.Font(size=14)
@@ -364,7 +378,10 @@ class MainMenu:
         
         self.btn_print = ttk.Button(content, text="PRINT\n(spacebar)", font=small_bold_font)
         self.btn_print.grid(column=2, row=5, rowspan=1, padx=5, pady=5)
-        self.btn_print.bind("<Button-1>", lambda event: printLabel(self.allowPrint, self.orderLength, self.tableLength, self.offByVal, self.minTolerance, self.orderVal))
+        self.btn_print.bind("<Button-1>", lambda event: printLabel(
+            isEnabled=self.allowPrint, orderLength=self.orderLength,
+              tableLength=self.tableLength, offset=self.offByVal,
+                tolerance=self.minTolerance, workOrder=self.orderVal))
         self.btn_print.configure(state=self.allowPrint)
 
         self.setupLaser()
