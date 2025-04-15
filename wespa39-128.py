@@ -85,11 +85,11 @@ def printLabel(isEnabled, desiredLength, actualLength, tolerance, offset, workOr
     print("Printing Label...")
     #Format is gonna be something like this; very simple once I get the config right.        
     raw_label = "^XA"
-    raw_label += "^CFA,25"
-    raw_label += "^FO5,5^FDWO#" + workOrder + ":   " + decInchesToFtIn(desiredLength) + "^FS"
-    raw_label += "^FO5,30^FDProduced:  " + decInchesToFtIn(actualLength) + "^FS"
-    raw_label += "^FO5,55^FDTolerance: " + decInchesToFtIn(tolerance) + "^FS"
-    raw_label += "^FO5,80^FDOff by:   " + decInchesToFtIn(offset) + "^FS"
+    raw_label += "^CFA,25" #Default font, size 25
+    raw_label += "^FO5,55^FDWO#" + workOrder + ":   " + decInchesToFtIn(desiredLength) + "^FS" #Per Mike's test label, 55 seems to be the sweet spot for the first line.
+    raw_label += "^FO5,80^FDProduced:  " + decInchesToFtIn(actualLength) + "^FS"
+    raw_label += "^FO5,105^FDTolerance: " + decInchesToFtIn(tolerance) + "^FS"
+    raw_label += "^FO5,130^FDOff by:   " + decInchesToFtIn(offset) + "^FS"
     raw_label += "^XZ"
 
     ##Turn this into a formatted string and plop in our own data!
@@ -227,7 +227,7 @@ class MainMenu:
             # Apparently ID command gets sent on laser auto-start (per setttings dump), some 30 lines.
             # So readlines and see if it lists commands (ID) - really any response other than an error code or timeout (6 seconds).
             rl = ""
-            rl = self.laserObject.readline().toString()
+            rl = str(self.laserObject.readline())
             print(f"Laser response: {rl}")
             if (rl.startswith("E")):
                 self.laserStatusString = parseErrorString(rl)
