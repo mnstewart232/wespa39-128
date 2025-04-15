@@ -73,13 +73,14 @@ def printLabel(isEnabled, orderLength, tableLength, tolerance, offset, workOrder
     #TODO: Be sure to un-comment isEnabled in release version!
     #if isEnabled == "normal":
     print("Printing Label...")
-    #Format is gonna be something like this; very simple once I get the config right.        
+    #Format is gonna be something like this; very simple once I get the config right.
     raw_label = "^XA"
-    raw_label += "^CFA,20" #Default font, size 20
-    raw_label += "^FO0,70^FDWO#" + workOrder + ":   " + inchesToStr(orderLength) + "^FS"
-    raw_label += "^FO0,90^FDProduced:  " + inchesToStr(metersToInches(tableLength)) + "^FS"
-    raw_label += "^FO0,110^FDTolerance: " + inchesToStr(tolerance) + "^FS"
-    raw_label += "^FO0,130^FDOff by:    " + inchesToStr(offset) + "^FS"
+    raw_label += "^CFA,20" #Default system font, size 20
+    #Is # a special char in ZPL? Doesn't say so in the manual, but this first line seems to never print, no matter how far down I push it. (from 55 to 90!)
+    raw_label += "^FO0,90^FDWO#" + workOrder + ":   " + inchesToStr(orderLength) + "^FS"
+    raw_label += "^FO0,110^FDProduced:  " + inchesToStr(tableLength) + "^FS"
+    raw_label += "^FO0,130^FDTolerance: " + inchesToStr(tolerance) + "^FS"
+    raw_label += "^FO0,150^FDOff by:    " + inchesToStr(offset) + "^FS"
     raw_label += "^XZ"
 
     ##Turn this into a formatted string and plop in our own data!
@@ -190,7 +191,7 @@ class MainMenu:
         self.lbl_lengthVal.config(text=inchesToStr(self.orderLength))
         self.lbl_toleranceIndicator.config(text=self.toleranceIndicatorVal, background=self.toleranceColorVal)
         self.btn_print.configure(state=self.allowPrint)
-        self.lbl_tableLengthBox.config(text=inchesToStr(metersToInches(self.tableLength)))
+        self.lbl_tableLengthBox.config(text=inchesToStr(self.tableLength))
         self.lbl_offByBox.config(text=inchesToStr(self.offByVal))
         self.lbl_orderLengthBox.config(text=inchesToStr(self.orderLength))
         self.lbl_errorCode.config(text=self.laserStatusString)
@@ -229,7 +230,7 @@ class MainMenu:
                 self.laserStatusString = "Laser is off."
             elif(rl == b'LO\r\n'):
                 self.laserStatusString = "Laser is on."
-                
+
         except serial.SerialTimeoutException:
             print("Laser reset timed out.")
             self.laserStatusString = "Laser reset failed."
@@ -243,7 +244,7 @@ class MainMenu:
     def setupLaser(self):
         try:
             self.laserObject = serial.Serial(self.laserComPort, baudrate=9600, timeout=3, write_timeout=3)
-            self.laserObject.open()
+            #Would like to try testing connection with ID command to avoid false-positives.
             self.laserStatusString = "Laser connected on " + self.laserComPort
             print("Laser connected!")
         except serial.SerialException as e:
@@ -260,7 +261,7 @@ class MainMenu:
             time.sleep(0.5) #Wait for the laser to respond
             re = self.laserObject.readline()
             print(f"Laser response: {re}")
-            self.tableLength = float(re.decode('utf-8').strip())
+            self.tableLength = metersToInches(float(re.decode('utf-8').strip()))
         except serial.SerialTimeoutException:
             print("Laser read timed out.")
             self.laserStatusString = "Laser read failed."
@@ -302,7 +303,7 @@ class MainMenu:
         root.bind('<x>', lambda event: self.clear())
         root.bind('<l>', lambda event: self.resetLaser())
         root.bind('<g>', lambda event: self.getLaserLength())
-        root.bind('<space>', lambda event: printLabel(self.allowPrint))
+        root.bind('<space>', lambda event: printLabel(self.allowPrint, self.orderLength, self.tableLength, self.offByVal, self.minTolerance, self.orderVal))
         root.bind('<Key>', self.captureInput)
         
         smaller_font = font.Font(size=14)
@@ -337,7 +338,7 @@ class MainMenu:
         lbl_tableLength = ttk.Label(content, text="TABLE LENGTH:", justify="left", font=medium_font)
         lbl_tableLength.grid(column=0, row=2, columnspan=2, padx=50, pady=5)
 
-        self.lbl_tableLengthBox = ttk.Label(content, text=inchesToStr(metersToInches(self.tableLength)), justify="left", width=12, font=large_font, background="white", relief="solid")
+        self.lbl_tableLengthBox = ttk.Label(content, text=inchesToStr(self.tableLength), justify="left", width=12, font=large_font, background="white", relief="solid")
         self.lbl_tableLengthBox.grid(column=0, row=3, columnspan=2, padx=5, pady=5)
 
         lbl_offBy = ttk.Label(content, text="OFF BY:", justify="center", font=medium_font)
