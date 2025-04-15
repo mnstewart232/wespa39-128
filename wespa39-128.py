@@ -221,7 +221,6 @@ class MainMenu:
             print("Writing LO")
             self.laserObject.write(b'LO\r\n')
             print("Checking laser response...")
-            rl = ""
             rl = str(self.laserObject.readline())
             print(f"Laser response: {rl}")
             if (rl.startswith("E")):
@@ -230,10 +229,11 @@ class MainMenu:
                 self.laserStatusString = "Laser is off."
             elif(rl == b'LO\r\n'):
                 self.laserStatusString = "Laser is on."
-
+            elif(rl == b''):
+                self.laserStatusString = "Laser offline."
         except serial.SerialTimeoutException:
             print("Laser reset timed out.")
-            self.laserStatusString = "Laser reset failed."
+            self.laserStatusString = "Laser offline."
 
         print("Flushing buffer...")
         self.laserObject.flush #Clear the input buffer to avoid reading old data
@@ -244,14 +244,20 @@ class MainMenu:
     def setupLaser(self):
         try:
             self.laserObject = serial.Serial(self.laserComPort, baudrate=9600, timeout=3, write_timeout=3)
-            #Would like to try testing connection with ID command to avoid false-positives.
+            self.laserObject.write(b'ID\r\n') #Send the ID command to check the connection
+            time.sleep(0.5) #Wait for the laser to respond
+            re = self.laserObject.readlines()
+            if (re is None or len(re) == 0):
+                raise serial.SerialTimeoutException("No response from laser.")
+
             self.laserStatusString = "Laser connected on " + self.laserComPort
             print("Laser connected!")
         except serial.SerialException as e:
             self.laserStatusString = "Laser not found on " + self.laserComPort + " - check connection and configuration."
             print(f"Serial exception: {e}")
-
-        return
+        except serial.SerialTimeoutException:
+            self.laserStatusString = "Laser connection on " + self.laserComPort + " timed out."
+            print(f"Laser read timed out: {e}")
 
     def getLaserLength(self):
         #Manual override key is g - ideally we do this every half second or so, or set continuous read mode on init.
@@ -264,7 +270,7 @@ class MainMenu:
             self.tableLength = metersToInches(float(re.decode('utf-8').strip()))
         except serial.SerialTimeoutException:
             print("Laser read timed out.")
-            self.laserStatusString = "Laser read failed."
+            self.laserStatusString = "Laser offline."
         except ValueError:
             print("Non-numeric value received from laser; setting to 0.")
             self.tableLength = 0.0
@@ -293,8 +299,8 @@ class MainMenu:
         for i in range (0, 5):
             root.columnconfigure(i, weight=3)
 
-        for i in range (0, 7):
-            root.rowconfigure(i, weight=2)
+        #for i in range (0, 7):
+        #    root.rowconfigure(i, weight=2)
 
         root.resizable(width=False, height=False)
         root.title("WESPA 39-128")
