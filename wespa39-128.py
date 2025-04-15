@@ -31,10 +31,7 @@ from tkinter import font
     #win32print for printer handling
 
 #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
-def decInchesToFtIn(dec_inches: float):
-    if (dec_inches == None):
-        return "0.00 IN"
-
+def inchesToStr(dec_inches: float):
     feet = math.trunc(dec_inches/12)
     inches = format(dec_inches - feet * 12, '.2f')
 
@@ -43,14 +40,8 @@ def decInchesToFtIn(dec_inches: float):
     else:   
         return "{0} IN".format(inches)
     
-def metersToFtIn(meters: float):
-    decIn = meters * 39.3701 #Convert meters to inches, then to decimal feet-inches
-    feet = math.trunc(decIn/12)
-    inches = format(decIn - feet * 12, '.2f')
-    if (feet > 0):
-        return "{0} FT {1} IN".format(feet, inches)
-    else:
-        return "{0} IN".format(inches)
+def metersToInches(meters: float):
+    return meters * 39.3701
 
 def parseErrorString(err: str):
     print(f"Parsing error string: {err}")
@@ -74,10 +65,9 @@ def parseErrorString(err: str):
         case "E64": return err + ": Framing - error SIO"
 
     #Either return nothing or a generic error, depending on how I want to handle it in the GUI
-    return ""
-        
+    return ""     
 
-def printLabel(isEnabled, desiredLength, actualLength, tolerance, offset, workOrder):
+def printLabel(isEnabled, orderLength, tableLength, tolerance, offset, workOrder):
     #https://timgolden.me.uk/python/win32_how_do_i/print.html
 
     #TODO: Be sure to un-comment isEnabled in release version!
@@ -85,11 +75,11 @@ def printLabel(isEnabled, desiredLength, actualLength, tolerance, offset, workOr
     print("Printing Label...")
     #Format is gonna be something like this; very simple once I get the config right.        
     raw_label = "^XA"
-    raw_label += "^CFA,25" #Default font, size 25
-    raw_label += "^FO5,55^FDWO#" + workOrder + ":   " + decInchesToFtIn(desiredLength) + "^FS" #Per Mike's test label, 55 seems to be the sweet spot for the first line.
-    raw_label += "^FO5,80^FDProduced:  " + decInchesToFtIn(actualLength) + "^FS"
-    raw_label += "^FO5,105^FDTolerance: " + decInchesToFtIn(tolerance) + "^FS"
-    raw_label += "^FO5,130^FDOff by:   " + decInchesToFtIn(offset) + "^FS"
+    raw_label += "^CFA,20" #Default font, size 20
+    raw_label += "^FO0,70^FDWO#" + workOrder + ":   " + inchesToStr(orderLength) + "^FS"
+    raw_label += "^FO0,90^FDProduced:  " + inchesToStr(metersToInches(tableLength)) + "^FS"
+    raw_label += "^FO0,110^FDTolerance: " + inchesToStr(tolerance) + "^FS"
+    raw_label += "^FO0,130^FDOff by:    " + inchesToStr(offset) + "^FS"
     raw_label += "^XZ"
 
     ##Turn this into a formatted string and plop in our own data!
@@ -130,9 +120,9 @@ class MainMenu:
     minTolerance = 0.1 #Fill this in from config file
     maxTolerance = 6.0 #Fill this in from config file
     toleranceIndicatorVal = "Outside Tolerance"
-    toleranceColorVal = "red"
+    toleranceColorVal = "red" #red/yellow/green
     
-    allowPrint = "normal"
+    allowPrint = "normal" #normal/disabled
     printLabelText = "Cut To Length"
     laserStatusString = ""
     
@@ -172,9 +162,13 @@ class MainMenu:
             self.orderVal = self.currentBarcode[0:4]
             self.orderLength = float(self.currentBarcode[4:]).__round__(2)
         elif(self.currentBarcode != ""):
-            #If we get here and the barcode isn't empty, it's probably a valid Line39 code.
+            #If we get here and the barcode isn't empty, it's probably a Line39 code.
             #TODO: more proof testing on 128 codes once a proper scanner is available.
             self.orderLength = float(self.currentBarcode).__round__(2)
+        else:
+            #currentBarcode is empty or wrong format.
+            self.orderVal = "    "
+            self.orderLength = 0.0
 
         self.offByVal = self.tableLength - self.orderLength
 
@@ -193,12 +187,12 @@ class MainMenu:
             self.allowPrint = "disabled"
 
         self.lbl_workOrderVal.config(text=self.orderVal)
-        self.lbl_lengthVal.config(text=decInchesToFtIn(self.orderLength))
+        self.lbl_lengthVal.config(text=inchesToStr(self.orderLength))
         self.lbl_toleranceIndicator.config(text=self.toleranceIndicatorVal, background=self.toleranceColorVal)
         self.btn_print.configure(state=self.allowPrint)
-        self.lbl_tableLengthBox.config(text=decInchesToFtIn(self.tableLength))
-        self.lbl_offByBox.config(text=decInchesToFtIn(self.offByVal))
-        self.lbl_orderLengthBox.config(text=decInchesToFtIn(self.orderLength))
+        self.lbl_tableLengthBox.config(text=inchesToStr(metersToInches(self.tableLength)))
+        self.lbl_offByBox.config(text=inchesToStr(self.offByVal))
+        self.lbl_orderLengthBox.config(text=inchesToStr(self.orderLength))
         self.lbl_errorCode.config(text=self.laserStatusString)
 
         self.lbl_workOrderVal.update()
@@ -219,35 +213,42 @@ class MainMenu:
         ##Send a LF followed by LO after a short delay
         # Try using ascii("LF\n") to send the LF and LO commands if a string literal doesn't work.
         try:
-            self.laserObject.write(b'LF\n')
+            print("Writing LF")
+            self.laserObject.write(b'LF\r\n')
+            print("Waiting")
             time.sleep(0.5) #Wait for the laser to reset
-            self.laserObject.write(b'LO\n')
-            print("Checking for laser response...")
-            #Verify the connection, but how?
-            # Apparently ID command gets sent on laser auto-start (per setttings dump), some 30 lines.
-            # So readlines and see if it lists commands (ID) - really any response other than an error code or timeout (6 seconds).
+            print("Writing LO")
+            self.laserObject.write(b'LO\r\n')
+            print("Checking laser response...")
             rl = ""
             rl = str(self.laserObject.readline())
             print(f"Laser response: {rl}")
             if (rl.startswith("E")):
                 self.laserStatusString = parseErrorString(rl)
-
+            elif (rl == b'LF\r\n'):
+                self.laserStatusString = "Laser is off."
+            elif(rl == b'LO\r\n'):
+                self.laserStatusString = "Laser is on."
+                
         except serial.SerialTimeoutException:
             print("Laser reset timed out.")
             self.laserStatusString = "Laser reset failed."
 
-        
+        print("Flushing buffer...")
+        self.laserObject.flush #Clear the input buffer to avoid reading old data
         self.updateGUI()
         return
 
     # Run this after the GUI inits. Establish serial communication.
     def setupLaser(self):
         try:
-            self.laserObject = serial.Serial(self.laserComPort, baudrate=9600, timeout=10)
-            self.laserObject.write_timeout = 1
+            self.laserObject = serial.Serial(self.laserComPort, baudrate=9600, timeout=3, write_timeout=3)
+            self.laserObject.open()
             self.laserStatusString = "Laser connected on " + self.laserComPort
-        except: 
+            print("Laser connected!")
+        except serial.SerialException as e:
             self.laserStatusString = "Laser not found on " + self.laserComPort + " - check connection and configuration."
+            print(f"Serial exception: {e}")
 
         return
 
@@ -259,14 +260,18 @@ class MainMenu:
             time.sleep(0.5) #Wait for the laser to respond
             re = self.laserObject.readline()
             print(f"Laser response: {re}")
-            #Laser is by default configured to return in meters, so convert to decimal inches
-            self.tableLength = metersToFtIn(float(re.decode('utf-8').strip()))
+            self.tableLength = float(re.decode('utf-8').strip())
         except serial.SerialTimeoutException:
             print("Laser read timed out.")
             self.laserStatusString = "Laser read failed."
+        except ValueError:
+            print("Non-numeric value received from laser; setting to 0.")
+            self.tableLength = 0.0
 
+        print("Flushing buffer...")
+        self.laserObject.flush() #Clear the input buffer to avoid reading old data
         self.updateGUI()
-        return 
+        return
 
     #Deals with keyboard input from the barcode scanner.
     def captureInput(self, event):
@@ -318,7 +323,7 @@ class MainMenu:
         lbl_length = ttk.Label(content, text="Length: ", font=medium_font)
         lbl_length.grid(column=1, row=1, padx=5, pady=5, sticky="W")
 
-        self.lbl_lengthVal = ttk.Label(content, text=decInchesToFtIn(self.orderLength), font=medium_font)
+        self.lbl_lengthVal = ttk.Label(content, text=inchesToStr(self.orderLength), font=medium_font)
         self.lbl_lengthVal.grid(column=2, row=1, padx=5, pady=5, sticky="W")
 
         btn_clear = ttk.Button(content, text="CLEAR (X)", font=small_bold_font)
@@ -332,19 +337,19 @@ class MainMenu:
         lbl_tableLength = ttk.Label(content, text="TABLE LENGTH:", justify="left", font=medium_font)
         lbl_tableLength.grid(column=0, row=2, columnspan=2, padx=50, pady=5)
 
-        self.lbl_tableLengthBox = ttk.Label(content, text=decInchesToFtIn(self.tableLength), justify="left", width=12, font=large_font, background="white", relief="solid")
+        self.lbl_tableLengthBox = ttk.Label(content, text=inchesToStr(metersToInches(self.tableLength)), justify="left", width=12, font=large_font, background="white", relief="solid")
         self.lbl_tableLengthBox.grid(column=0, row=3, columnspan=2, padx=5, pady=5)
 
         lbl_offBy = ttk.Label(content, text="OFF BY:", justify="center", font=medium_font)
         lbl_offBy.grid(column=2, row=2, columnspan=1, padx=5, pady=5)
 
-        self.lbl_offByBox = ttk.Label(content, text=decInchesToFtIn(self.offByVal), justify="left", width=12, font=large_font, background="white", relief="solid")
+        self.lbl_offByBox = ttk.Label(content, text=inchesToStr(self.offByVal), justify="left", width=12, font=large_font, background="white", relief="solid")
         self.lbl_offByBox.grid(column=2, row=3, columnspan=1, padx=5, pady=5,sticky="W") 
 
         lbl_orderLength = ttk.Label(content, text="ORDER LENGTH:", justify="center", font=medium_font)
         lbl_orderLength.grid(column=3, row=2, columnspan=2, padx=5, pady=5)
 
-        self.lbl_orderLengthBox = ttk.Label(content, text=decInchesToFtIn(self.orderLength), justify="right", width=12, font=large_font, background="white", relief="solid")
+        self.lbl_orderLengthBox = ttk.Label(content, text=inchesToStr(self.orderLength), justify="right", width=12, font=large_font, background="white", relief="solid")
         self.lbl_orderLengthBox.grid(column=3, row=3, columnspan=2, padx=5, pady=5, sticky="E")
 
         self.lbl_toleranceIndicator = ttk.Label(content, text=self.toleranceIndicatorVal, background=self.toleranceColorVal, font=xl_font)
