@@ -70,79 +70,76 @@ def parseErrorString(err: str):
     #Either return nothing or a generic error, depending on how I want to handle it in the GUI
     return ""     
 
-def printLabel(isEnabled, orderLength, tableLength, tolerance, offset, workOrder):
-    #https://timgolden.me.uk/python/win32_how_do_i/print.html
+def printLabel(isEnabled: str, orderLength: float, tableLength: float, tolerance: float, offset: float, workOrder: str):
+    #https://timgolden.me.uk/python/win32_how_do_i/print.htm
+    if isEnabled == "normal":
+        print("Printing Label...")
+        
+        raw_label = "^XA"
+        raw_label += "^CFA,20" #TODO: Make font size configurable from GUI to find sweet spot.
+        raw_label += "^FO0,90^FDWO#" + workOrder + ":   " + inchesToStr(orderLength) + "^FS"
+        raw_label += "^FO0,110^FDProduced:  " + inchesToStr(tableLength) + "^FS"
+        raw_label += "^FO0,130^FDTolerance: " + inchesToStr(tolerance) + "^FS"
+        raw_label += "^FO0,150^FDOff by:    " + inchesToStr(offset) + "^FS"
+        raw_label += "^XZ"
 
-    #TODO: Be sure to un-comment isEnabled in release version!
-    #if isEnabled == "normal":
-    print("Printing Label...")
-    #Format is gonna be something like this; very simple once I get the config right.
-    raw_label = "^XA"
-    raw_label += "^CFA,20" #Default system font, size 20
-    #Is # a special char in ZPL? Doesn't say so in the manual, but this first line seems to never print, no matter how far down I push it. (from 55 to 90!)
-    raw_label += "^FO0,90^FDWO#" + workOrder + ":   " + inchesToStr(orderLength) + "^FS"
-    raw_label += "^FO0,110^FDProduced:  " + inchesToStr(tableLength) + "^FS"
-    raw_label += "^FO0,130^FDTolerance: " + inchesToStr(tolerance) + "^FS"
-    raw_label += "^FO0,150^FDOff by:    " + inchesToStr(offset) + "^FS"
-    raw_label += "^XZ"
-
-    ##Turn this into a formatted string and plop in our own data!
-    labelBytes=bytes(raw_label, "utf-8")
-    print("Label Bytes: " + str(labelBytes))
-    #The only flaw here is that the default printer must be selected in Windows.
-    #Eventually I'll add a menu option for printer selection, but get it working first.
-    defaultPrinter = win32print.GetDefaultPrinter()
-    myPrinter = win32print.OpenPrinter(defaultPrinter)
-    print("Default Printer: " + defaultPrinter)
-    try:
-        print("Starting print job...")
-        printJob = win32print.StartDocPrinter(myPrinter, 1, ("label", None, "RAW"))
-        print("Starting page...")
-        win32print.StartPagePrinter(myPrinter)
-        print("Writing label bytes...")
-        win32print.WritePrinter(myPrinter, labelBytes)
-        print("Ending page...")
-        win32print.EndPagePrinter(myPrinter)
-        print("Ending print job...")
-        win32print.EndDocPrinter(myPrinter)
-    except Exception as e:
-        print(f"Error printing label: {e}")
-    finally:
-        print("Finally, Closing printer...")
-        win32print.ClosePrinter(myPrinter)
-    return
+        ##Turn this into a formatted string and plop in our own data!
+        labelBytes=bytes(raw_label, "utf-8")
+        print("Label Bytes: " + str(labelBytes))
+        #The only flaw here is that the default printer must be selected in Windows.
+        #TODO: add GUI option for printer selection
+        defaultPrinter = win32print.GetDefaultPrinter()
+        myPrinter = win32print.OpenPrinter(defaultPrinter)
+        print("Default Printer: " + defaultPrinter)
+        try:
+            print("Starting print job...")
+            printJob = win32print.StartDocPrinter(myPrinter, 1, ("label", None, "RAW"))
+            print("Starting page...")
+            win32print.StartPagePrinter(myPrinter)
+            print("Writing label bytes...")
+            win32print.WritePrinter(myPrinter, labelBytes)
+            print("Ending page...")
+            win32print.EndPagePrinter(myPrinter)
+            print("Ending print job...")
+            win32print.EndDocPrinter(myPrinter)
+        except Exception as e:
+            print(f"Error printing label: {e}")
+        finally:
+            print("Finally, Closing printer...")
+            win32print.ClosePrinter(myPrinter)
 
 #Main class for the GUI
 class MainMenu:
-    scannerInput = "" #Barcode scanner input
-    currentBarcode = "" #Last barcode scanned - delimited by newlines with the scanner
-    orderVal = "" #First 4 digits of a line128 barcode
-    orderLength = 0.0 #line39 code, or the remaining digits of a line128
-    tableLength = 0.0 #Fill this in from laser scanner
-    offByVal = 0.0
+    scannerInput: str = "" #Barcode scanner input
+    currentBarcode: str = "" #Last barcode scanned - delimited by newlines with the scanner
+    orderVal: str = "" #First 4 digits of a line128 barcode
+    orderLength: float = 0.0 #line39 code, or the remaining digits of a line128
+    tableLength: float = 0.0 #Fill this in from laser scanner
+    offByVal: float = 0.0
 
-    minTolerance = 0.1 #Fill this in from config file
-    maxTolerance = 6.0 #Fill this in from config file
-    toleranceIndicatorVal = "Outside Tolerance"
-    toleranceColorVal = "red" #red/yellow/green
+    minTolerance: float = 0.1 #Fill this in from config file
+    maxTolerance: float = 6.0 #Fill this in from config file
+    toleranceIndicatorVal: str = "Outside Tolerance"
+    toleranceColorVal: str = "red" #red/yellow/green
     
-    allowPrint = "normal" #normal/disabled
-    printLabelText = "Cut To Length"
-    laserStatusString = ""
+    allowPrint: str = "normal" #normal/disabled
+    printLabelText: str = "Cut To Length"
+    laserStatusString: str = ""
     
-    laserObject = None #Gets initialized in setupLaser()
-    laserComPort = "COM3" #Fill this in from config file
+    laserObject: serial.Serial = None #Gets initialized in setupLaser()
+    laserIsConnected: bool = False #True if the laser is connected, false if not.
+    laserComPort: str = "COM3" #Fill this in from config file
 
-    lbl_workOrderVal = None
-    lbl_lengthVal = None
-    lbl_toleranceIndicator = None
-    lbl_tableLengthBox = None
-    lbl_offByBox = None
-    lbl_orderLengthBox = None
-    lbl_errorCode = None
+    lbl_workOrderVal: ttk.Label = None
+    lbl_lengthVal: ttk.Label = None
+    lbl_toleranceIndicator: ttk.Label = None
+    lbl_tableLengthBox: ttk.Label = None
+    lbl_offByBox: ttk.Label = None
+    lbl_orderLengthBox: ttk.Label = None
+    lbl_errorCode: ttk.Label = None
     
-    btn_print = None
-    btn_resetLaser = None
+    btn_print: ttk.Button = None
+    btn_resetLaser: ttk.Button = None
 
     def clear(self):
         print("Clearing Barcodes...")
@@ -211,11 +208,16 @@ class MainMenu:
         print(f"Order Length: {self.orderLength}, Order Value: {self.orderVal}")
         return
 
-    #Send an off / on signal to the laser.
+    def tweakLaserOffset(self, newOffset: float):
+
+        return
+
+    #Send an off / on signal to the laser, or try to reconnect if it's not connected.
     def resetLaser(self):
-        if (self.laserObject.is_open == False):
-            self.laserStatusString = "Laser not connected."
-            print("Laser not connected.")
+        if (self.laserIsConnected is False):
+            print("Laser not connected. Attempting to reconnect...")
+            self.laserObject.close() #Close the serial port if it's open
+            self.setupLaser()
             return
 
         print("Resetting Laser...")
@@ -239,6 +241,7 @@ class MainMenu:
         except serial.SerialTimeoutException:
             print("Laser reset timed out.")
             self.laserStatusString = "Laser offline."
+            self.laserIsConnected = False
 
         print("Flushing buffer...")
         self.laserObject.flush() #Clear the input buffer to avoid reading old data
@@ -257,6 +260,7 @@ class MainMenu:
 
             self.laserStatusString = "Laser connected on " + self.laserComPort
             print("Laser connected!")
+            self.laserIsConnected = True
         except serial.SerialException as e:
             self.laserStatusString = "Laser not found on " + self.laserComPort + " - check connection and configuration."
             print(f"Serial exception: {e}")
@@ -264,6 +268,7 @@ class MainMenu:
             self.laserStatusString = "Laser connection on " + self.laserComPort + " timed out."
             print(f"Laser read timed out: {e}")
 
+    #TODO: Make this read on a regular timer instead of a button press.
     def getLaserLength(self):
         if (self.laserObject.is_open is False):
             self.laserStatusString = "Laser not connected."
@@ -272,6 +277,8 @@ class MainMenu:
         
         #Manual override key is g - ideally we do this every half second or so, or set continuous read mode on init.
         print("Getting laser length (DM)...")
+        #TODO: Consider using the more precise DS command instead of DM (note that this is not instant, but is faster than DT, which can take up to 6 seconds).
+        #Whatever I choose will need to take this timing into account - the laser currently has an ST of 0 (no limit).
         try:
             self.laserObject.write(b'DM\n') #Send the command to get the length
             time.sleep(0.5) #Wait for the laser to respond
@@ -281,6 +288,7 @@ class MainMenu:
         except serial.SerialTimeoutException:
             print("Laser read timed out.")
             self.laserStatusString = "Laser offline."
+            self.laserIsConnected = False
         except ValueError:
             self.laserStatusString = parseErrorString(str(re).strip())
             print("Non-numeric value received from laser.")
@@ -292,6 +300,7 @@ class MainMenu:
         return
 
     #Deals with keyboard input from the barcode scanner.
+    #Side effect of this is that it allows for manual input of the barcode scanner, which is actually a desired feature.
     def captureInput(self, event):
         if event.keysym == 'Return':
             print(f"Received input: {self.scannerInput}")
@@ -301,7 +310,7 @@ class MainMenu:
         elif (event.char >= '0' and event.char <= '9' or event.char == '.'):
             self.scannerInput += event.char  # Append the character to the input string
 
-    ##Set up GUI elements here.
+    #TODO: Make GUI scalable
     def __init__(self, root):
         print("Initializing GUI...")
         content = ttk.Frame(root, width=900, height=600)
