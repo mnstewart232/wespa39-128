@@ -1,6 +1,7 @@
 import math
 import time
 import serial
+import asyncio
 import win32print
 import tkinter as ttk
 from tkinter import font
@@ -122,7 +123,7 @@ class MainMenu:
     toleranceIndicatorVal: str = "Outside Tolerance"
     toleranceColorVal: str = "red" #red/yellow/green
     
-    allowPrint: str = "normal" #normal/disabled
+    allowPrint: str = "disabled" #normal/disabled
     printLabelText: str = "Cut To Length"
     laserStatusString: str = ""
     
@@ -215,9 +216,10 @@ class MainMenu:
 
     #Send an off / on signal to the laser, or try to reconnect if it's not connected.
     def resetLaser(self):
-        if (self.laserIsConnected is False):
+        if (not self.laserIsConnected):
             print("Laser not connected. Attempting to reconnect...")
-            self.laserObject.close() #Close the serial port if it's open
+            if (self.laserObject is not None):
+                self.laserObject.close() #Close the serial port if it's open
             self.setupLaser()
             return
 
@@ -243,6 +245,9 @@ class MainMenu:
             print("Laser reset timed out.")
             self.laserStatusString = "Laser offline."
             self.laserIsConnected = False
+        except Exception as e:
+            self.laserStatusString = "Unhandled exception. Restart program."
+            print(f"Unhandled Exception: {e}")
 
         print("Flushing buffer...")
         self.laserObject.flush() #Clear the input buffer to avoid reading old data
@@ -268,21 +273,27 @@ class MainMenu:
         except serial.SerialTimeoutException:
             self.laserStatusString = "Laser connection on " + self.laserComPort + " timed out."
             print(f"Laser read timed out: {e}")
+        except Exception as e:
+            self.laserStatusString = "Unhandled exception. Restart program."
+            print(f"Unhandled Exception: {e}")
 
     #TODO: Make this read on a regular timer instead of a button press.
-    def getLaserLength(self):
-        if (self.laserObject.is_open is False):
+    def getLaserLength(self, root):
+        if (not self.laserIsConnected):
             self.laserStatusString = "Laser not connected."
             print("Laser not connected.")
+            #Note that this will prevent the getLaserLength function from running again.
+            #Use the reset button to reconnect, then manually override with g to get it going again.
+            #Hopefully that won't be necessary very often...or at all.
             return
         
-        #Manual override key is g - ideally we do this every half second or so, or set continuous read mode on init.
-        print("Getting laser length (DS)...")
+        #Manual override key is g - ideally we do this every half second or so.
+        print("Getting laser length (DM)...")
         #TODO: Consider using the more precise DS command instead of DM (note that this is not instant, but is faster than DT, which can take up to 6 seconds).
         #Whatever I choose will need to take this timing into account - the laser currently has an ST of 0 (no limit).
         try:
-            self.laserObject.write(b'DS\n') #Send the command to get the length
-            time.sleep(0.5) #Wait for the laser to respond
+            self.laserObject.write(b'DM\n') #Send the command to get the length
+            print("Waiting for laser response...")
             re = self.laserObject.readline()
             print(f"Laser response: {re}")
             self.tableLength = metersToInches(float(re.decode('utf-8').strip()))
@@ -294,10 +305,17 @@ class MainMenu:
             self.laserStatusString = parseErrorString(str(re).strip())
             print("Non-numeric value received from laser.")
             self.tableLength = 0.0
+        except Exception as e:
+            self.laserStatusString = "Unhandled exception. Restart program."
+            print(f"Unhandled Exception: {e}")
+            self.tableLength = 0.0
 
         print("Flushing buffer...")
         self.laserObject.flush() #Clear the input buffer to avoid reading old data
         self.updateGUI()
+
+        root.after(500, self.getLaserLength) #Call this function again after 500ms
+
         return
 
     #Deals with keyboard input from the barcode scanner.
@@ -321,6 +339,7 @@ class MainMenu:
     #TODO: Make GUI scalable
     def __init__(self, root: ttk.Tk):
         print("Initializing GUI...")
+        root.iconbitmap("logo_sq_notext_ctr_256.ico")
         #root is already initialized as ttk.Tk()
         root.resizable(True, True)
         root.title("WESPA 39-128")
@@ -336,7 +355,7 @@ class MainMenu:
         # Bind keyboard shortcuts; also detect barcode input
         root.bind('<x>', lambda event: self.clear())
         root.bind('<l>', lambda event: self.resetLaser())
-        root.bind('<g>', lambda event: self.getLaserLength())
+        root.bind('<g>', lambda event: self.getLaserLength(root))
         root.bind('<space>', lambda event: printLabel(
             isEnabled=self.allowPrint, orderLength=self.orderLength,
               tableLength=self.tableLength, offset=self.offByVal,
@@ -423,8 +442,9 @@ class MainMenu:
         self.lbl_errorCode.grid(column=0, row=6, columnspan=3, padx=5, pady=5, sticky="w")
 
         print("GUI Initialized!")
-        
 
+        root.after(1000, self.getLaserLength(root))
+        
 
 root = ttk.Tk()
 MainMenu(root)
