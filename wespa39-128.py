@@ -1,7 +1,7 @@
 import math
 import time
 import serial
-import asyncio
+from configparser import ConfigParser
 import win32print
 import tkinter as ttk
 from tkinter import font
@@ -117,7 +117,7 @@ class MainMenu:
     orderLength: float = 0.0 #line39 code, or the remaining digits of a line128
     tableLength: float = 0.0 #Fill this in from laser scanner
     offByVal: float = 0.0
-
+    laserOffset: float = 0.0 #Fill this in from config file
     minTolerance: float = 0.1 #Fill this in from config file
     maxTolerance: float = 6.0 #Fill this in from config file
     toleranceIndicatorVal: str = "Outside Tolerance"
@@ -180,17 +180,23 @@ class MainMenu:
 
         self.offByVal = abs(self.tableLength - self.orderLength)
 
+        tolerancePosition: str = ""
+        if (self.orderLength < self.tableLength):
+            tolerancePosition = ": Too Long"
+        elif (self.orderLength > self.tableLength):
+            tolerancePosition = ": Too Short"
+
         #Will change between green, yellow, and red based on tolerance, with text changing as well (Within/Near/Outside Tolerance)
         if abs(self.offByVal) <= self.minTolerance and self.offByVal >= 0:
             self.toleranceIndicatorVal = "Within Tolerance"
             self.toleranceColorVal = "green"
             self.allowPrint = "normal"
         elif abs(self.offByVal) <= self.maxTolerance and self.offByVal > self.minTolerance:
-            self.toleranceIndicatorVal = "Near Tolerance"
+            self.toleranceIndicatorVal = "Near Tolerance" + tolerancePosition
             self.toleranceColorVal = "yellow"
             self.allowPrint = "disabled"
         else:
-            self.toleranceIndicatorVal = "Outside Tolerance"
+            self.toleranceIndicatorVal = "Outside Tolerance" + tolerancePosition
             self.toleranceColorVal = "red"
             self.allowPrint = "disabled"
 
@@ -215,10 +221,7 @@ class MainMenu:
         print(f"Order Length: {self.orderLength}, Order Number: {self.orderVal}, Table Length: {self.tableLength}, Off By: {self.offByVal}")
         return
 
-    #TODO
-    def tweakLaserOffset(self, newOffset: float):
 
-        return
 
     #Send an off / on signal to the laser, or try to reconnect if it's not connected.
     def resetLaser(self):
@@ -285,7 +288,6 @@ class MainMenu:
             self.laserStatusString = "Unhandled exception. Restart program."
             print(f"Unhandled Exception: {e}")
 
-    #TODO: Make this read on a regular timer instead of a button press.
     def getLaserLength(self, root):
         if (not self.laserIsConnected):
             self.laserStatusString = "Laser not connected."
@@ -295,7 +297,6 @@ class MainMenu:
             #Hopefully that won't be necessary very often...or at all.
             return
         
-        #Manual override key is g - ideally we do this every half second or so.
         print("Getting laser length (DM)...")
         #TODO: Consider using the more precise DS command instead of DM (note that this is not instant, but is faster than DT, which can take up to 6 seconds).
         #Whatever I choose will need to take this timing into account - the laser currently has an ST of 0 (no limit).
@@ -344,9 +345,27 @@ class MainMenu:
         self.tableLength = 256.0
         self.offByVal = self.tableLength - self.orderLength
         return
+    
+    def readConfigFile(self):
+        c = ConfigParser()
+        try:
+            c.read('wespa39-128.ini')
+            self.laserComPort = c.get('ports', 'laserComPort')
+            self.laserOffset = c.getfloat('offsets', 'laserOffset')
+            self.minTolerance = c.getfloat('offsets', 'minTolerance')
+            self.maxTolerance = c.getfloat('offsets', 'maxTolerance')
+        except Exception as e:
+            print(f"Error reading config file: {e}")
+            print("Using default values.")
+
+        print("Config file loaded.")
+        return
 
     #TODO: Make GUI scalable
     def __init__(self, root: ttk.Tk):
+        print("Loading config file...")
+        self.readConfigFile()
+
         print("Initializing GUI...")
         #root is already initialized as ttk.Tk()
         root.resizable(True, True)
