@@ -339,7 +339,6 @@ class MainMenu:
     #TODO: Make GUI scalable
     def __init__(self, root: ttk.Tk):
         print("Initializing GUI...")
-        root.iconbitmap("logo_sq_notext_ctr_256.ico")
         #root is already initialized as ttk.Tk()
         root.resizable(True, True)
         root.title("WESPA 39-128")
