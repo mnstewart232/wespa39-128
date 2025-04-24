@@ -362,7 +362,7 @@ class MainMenu:
         for i in range(7):
             root.rowconfigure(i, weight=1)
 
-        self.loadDebugVals()
+        #self.loadDebugVals()
 
         # Bind keyboard shortcuts; also detect barcode input
         root.bind('<x>', lambda event: self.clear())
