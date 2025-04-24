@@ -314,7 +314,7 @@ class MainMenu:
         self.laserObject.flush() #Clear the input buffer to avoid reading old data
         self.updateGUI()
 
-        root.after(500, self.getLaserLength) #Call this function again after 500ms
+        root.after(500, self.getLaserLength(root)) #Call this function again after 500ms
 
         return
 
