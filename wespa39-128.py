@@ -252,6 +252,8 @@ class MainMenu:
         print("Flushing buffer...")
         self.laserObject.flush() #Clear the input buffer to avoid reading old data
         self.updateGUI()
+
+        #Call ReadLaserLength() here again since connection has been refreshed?
         return
 
     # Run this after the GUI inits. Establish serial communication.
@@ -294,6 +296,7 @@ class MainMenu:
         try:
             self.laserObject.write(b'DM\n') #Send the command to get the length
             print("Waiting for laser response...")
+            time.sleep(0.5) #Wait for the laser to respond
             re = self.laserObject.readline()
             print(f"Laser response: {re}")
             self.tableLength = metersToInches(float(re.decode('utf-8').strip()))
