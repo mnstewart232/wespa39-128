@@ -33,8 +33,8 @@ from tkinter import font
 
 #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
 def inchesToStr(dec_inches: float):
-    feet = math.trunc(dec_inches/12)
-    inches = format(dec_inches - feet * 12, '.2f')
+    feet = abs(math.trunc(dec_inches/12))
+    inches = format(abs(dec_inches) - feet * 12, '.2f')
 
     if (feet > 0):
         return "{0} FT {1} IN".format(feet, inches)
@@ -160,14 +160,12 @@ class MainMenu:
         #Until Line128 is used, Work Order won't be in the barcode - be sure to code for it not being there.
         #This assumes a Line128 style code. How to better detect what kind of code it is?
         #Simple, check if the first 4 chars are all digits (Line39 has 3 max). If so, it's a Line128 code.
-        if (self.currentBarcode[0:4].isdigit()):
+        if (len(self.currentBarcode) > 4 and self.currentBarcode[0:4].isdigit()):
             self.orderVal = self.currentBarcode[0:4]
             try:
                 self.orderLength = float(self.currentBarcode[4:]).__round__(2)
             except ValueError:
                 print(f"ValueError: Could not convert {self.currentBarcode[4:]} to float.")
-                self.orderLength = 0.0
-                self.orderVal = "    "
         elif(self.currentBarcode is not None and len(self.currentBarcode) > 0):
             #If we get here and the barcode isn't empty, it's probably a Line39 code.
             #TODO: more proof testing on 128 codes once a proper scanner is available.
@@ -175,21 +173,19 @@ class MainMenu:
                 self.orderLength = float(self.currentBarcode).__round__(2)
             except ValueError:
                 print(f"ValueError: Could not convert {self.currentBarcode} to float.")
-                self.orderLength = 0.0
-                self.orderVal = "    "
         else:
             #currentBarcode is empty or wrong format.
             self.orderVal = "    "
             self.orderLength = 0.0
 
-        self.offByVal = self.tableLength - self.orderLength
+        self.offByVal = abs(self.tableLength - self.orderLength)
 
         #Will change between green, yellow, and red based on tolerance, with text changing as well (Within/Near/Outside Tolerance)
-        if abs(self.offByVal) <= self.minTolerance and abs(self.offByVal) > 0:
+        if abs(self.offByVal) <= self.minTolerance and self.offByVal >= 0:
             self.toleranceIndicatorVal = "Within Tolerance"
             self.toleranceColorVal = "green"
             self.allowPrint = "normal"
-        elif abs(self.offByVal) <= self.maxTolerance and abs(self.offByVal) > self.minTolerance:
+        elif abs(self.offByVal) <= self.maxTolerance and self.offByVal > self.minTolerance:
             self.toleranceIndicatorVal = "Near Tolerance"
             self.toleranceColorVal = "yellow"
             self.allowPrint = "disabled"
@@ -216,7 +212,7 @@ class MainMenu:
         self.lbl_orderLengthBox.update()
         self.lbl_errorCode.update()
 
-        print(f"Order Length: {self.orderLength}, Order Value: {self.orderVal}")
+        print(f"Order Length: {self.orderLength}, Order Number: {self.orderVal}, Table Length: {self.tableLength}, Off By: {self.offByVal}")
         return
 
     #TODO
@@ -346,7 +342,7 @@ class MainMenu:
         self.orderVal = "DBUG"
         self.orderLength = 128.0
         self.tableLength = 256.0
-        self.offByVal = 0.69
+        self.offByVal = self.tableLength - self.orderLength
         return
 
     #TODO: Make GUI scalable
@@ -362,7 +358,7 @@ class MainMenu:
         for i in range(7):
             root.rowconfigure(i, weight=1)
 
-        #self.loadDebugVals()
+        self.loadDebugVals()
 
         # Bind keyboard shortcuts; also detect barcode input
         root.bind('<x>', lambda event: self.clear())
