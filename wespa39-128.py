@@ -178,12 +178,12 @@ class MainMenu:
             self.orderVal = "    "
             self.orderLength = 0.0
 
-        self.offByVal = abs(self.tableLength - self.orderLength)
+        self.offByVal = abs((self.tableLength + self.laserOffset) - self.orderLength)
 
         tolerancePosition: str = ""
-        if (self.orderLength < self.tableLength):
+        if (self.orderLength < self.tableLength + self.laserOffset):
             tolerancePosition = ": Too Long"
-        elif (self.orderLength > self.tableLength):
+        elif (self.orderLength > self.tableLength + self.laserOffset):
             tolerancePosition = ": Too Short"
 
         #Will change between green, yellow, and red based on tolerance, with text changing as well (Within/Near/Outside Tolerance)
@@ -204,9 +204,9 @@ class MainMenu:
         self.lbl_lengthVal.config(text=inchesToStr(self.orderLength))
         self.lbl_toleranceIndicator.config(text=self.toleranceIndicatorVal, background=self.toleranceColorVal)
         self.btn_print.configure(state=self.allowPrint)
-        self.lbl_tableLengthBox.config(text=inchesToStr(self.tableLength))
+        self.lbl_tableLengthBox.config(text=inchesToStr(self.tableLength + self.laserOffset))
         self.lbl_offByBox.config(text=inchesToStr(self.offByVal))
-        self.lbl_orderLengthBox.config(text=inchesToStr(self.orderLength))
+        self.lbl_orderLengthBox.config(text=inchesToStr(self.orderLength + self.laserOffset))
         self.lbl_errorCode.config(text=self.laserStatusString)
 
         self.lbl_workOrderVal.update()
@@ -218,7 +218,7 @@ class MainMenu:
         self.lbl_orderLengthBox.update()
         self.lbl_errorCode.update()
 
-        print(f"Order Length: {self.orderLength}, Order Number: {self.orderVal}, Table Length: {self.tableLength}, Off By: {self.offByVal}")
+        print(f"Order Length: {self.orderLength}, Order Number: {self.orderVal}, Table Length: {self.tableLength + self.laserOffset}, Off By: {self.offByVal}")
         return
 
 
@@ -341,9 +341,10 @@ class MainMenu:
 
     def loadDebugVals(self):
         self.orderVal = "DBUG"
+        self.laserOffset = 0.42
         self.orderLength = 128.0
         self.tableLength = 256.0
-        self.offByVal = self.tableLength - self.orderLength
+        self.offByVal = self.tableLength + self.laserOffset - self.orderLength
         return
     
     def readConfigFile(self):
@@ -377,7 +378,7 @@ class MainMenu:
         for i in range(7):
             root.rowconfigure(i, weight=1)
 
-        self.loadDebugVals()
+        #self.loadDebugVals()
 
         # Bind keyboard shortcuts; also detect barcode input
         root.bind('<x>', lambda event: self.clear())
