@@ -173,13 +173,13 @@ class MainMenu:
         #Until Line128 is used, Work Order won't be in the barcode - be sure to code for it not being there.
         #This assumes a Line128 style code. How to better detect what kind of code it is?
         #Simple, check if the first 4 chars are all digits (Line39 has 3 max). If so, it's a Line128 code.
-        if (len(self.current_barcode) > 4 and self.current_barcode[0:4].isdigit()):
+        if len(self.current_barcode) > 4 and self.current_barcode[0:4].isdigit():
             self.order_str = self.current_barcode[0:4]
             try:
                 self.order_length = round(float(self.current_barcode[4:]), 2)
             except ValueError:
                 logging.error("ValueError: Could not convert %s to float.", self.current_barcode[4:])
-        elif(self.current_barcode is not None and len(self.current_barcode) > 0):
+        elif self.current_barcode is not None and len(self.current_barcode) > 0:
             #If we get here and the barcode isn't empty, it's probably a Line39 code.
             try:
                 self.order_length = round(float(self.current_barcode), 2)
@@ -193,9 +193,9 @@ class MainMenu:
         self.off_by_val = abs((self.table_length + self.laser_offset) - self.order_length)
 
         tolerance_position: str = ""
-        if (self.order_length < self.table_length + self.laser_offset):
+        if self.order_length < self.table_length + self.laser_offset:
             tolerance_position = ": Too Long"
-        elif (self.order_length > self.table_length + self.laser_offset):
+        elif self.order_length > self.table_length + self.laser_offset:
             tolerance_position = ": Too Short"
 
         #Will change between green, yellow, and red based on tolerance, with text changing as well (Within/Near/Outside Tolerance)
@@ -235,9 +235,9 @@ class MainMenu:
 
     #Send an off / on signal to the laser, or try to reconnect if it's not connected.
     def reset_laser(self):
-        if (not self.laser_is_connected):
+        if not self.laser_is_connected:
             logging.warning("Laser not connected. Attempting to reconnect...")
-            if (self.laser_object is not None):
+            if self.laser_object is not None:
                 self.laser_object.close() #Close the serial port if it's open
             self.setup_laser()
             return
@@ -260,8 +260,8 @@ class MainMenu:
             rl = str(self.laser_object.readline()).strip()
             logging.info("Laser response: %s", rl)
             self.laser_status = parse_laser_error(rl)
-        except serial.SerialTimeoutException:
-            logging.error("Laser reset timed out.")
+        except serial.SerialTimeoutException as e:
+            logging.error("Laser reset timed out: %s", e)
             self.laser_status = "Laser offline."
             self.laser_is_connected = False
         except Exception as e:
@@ -287,7 +287,7 @@ class MainMenu:
             self.laser_status = "Laser connected on " + self.laser_port
             logging.info("Laser connected!")
             self.laser_is_connected = True
-        except serial.SerialTimeoutException:
+        except serial.SerialTimeoutException as e:
             self.laser_status = "Laser connection on " + self.laser_port + " timed out."
             logging.error("Laser read timed out: %s", e)
         except serial.SerialException as e:
@@ -298,7 +298,7 @@ class MainMenu:
             logging.error(" Unhandled Exception: %s", e)
 
     def get_laser_length(self, root):
-        if (not self.laser_is_connected):
+        if not self.laser_is_connected:
             self.laser_status = "Laser not connected."
             logging.warning("Laser not connected.")
             #Note that this will prevent the getLaserLength function from running again.
@@ -372,6 +372,19 @@ class MainMenu:
 
         logging.info("Config file loaded.")
 
+    #Verify that this method is called when the program closes.
+    def on_exit(self):
+        logging.warning("Closing serial port and program...")
+        #This should prevent get_laser_length() from running again.
+        self.laser_is_connected = False
+        #Add time.sleep(0.5) here to allow the laser to finish sending data before closing the port?
+        try:
+            self.laser_object.close() #Close the serial port if it's open
+        except Exception as e:
+            logging.error("Error closing serial port: %s", e)
+
+        root.destroy()
+
 
     def __init__(self, root: ttk.Tk):
         self.read_config_file()
@@ -398,6 +411,8 @@ class MainMenu:
               table_length=self.table_length, offset=self.off_by_val,
                 tolerance=self.min_tolerance, work_order=self.order_str))
         root.bind('<Key>', self.capture_input)
+         #Call on_exit() when the window is closed, for a more graceful shutdown.
+        root.protocol("WM_DELETE_WINDOW", self.on_exit)
         
         base_size = 12
         smallest_font = font.Font(size=base_size)
