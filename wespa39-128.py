@@ -1,8 +1,8 @@
 import math
+import logging
 import time
-from time import strftime
-from configparser import ConfigParser
 import tkinter as ttk
+from configparser import ConfigParser
 from tkinter import font
 
 import serial
@@ -34,6 +34,12 @@ import win32print
     #pyserial for COM IO
     #win32print for printer handling
 
+#No colons in the logfile name, just a yyyy-mm-dd hhmmss timestamp
+logging.basicConfig(filename=str(time.strftime('%Y-%m-%d %H%M%S') + ' wespa39-128.log'),
+                    level=logging.DEBUG,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
+
 #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
 def get_inches_str(dec_inches: float):
     feet = abs(math.trunc(dec_inches/12))
@@ -48,38 +54,40 @@ def meters_to_inches(meters: float):
     return meters * 39.3701
 
 def parse_laser_error(err: str):
-    print(strftime('%G-%m-%d %H:%M:%S') + " Parsing error string: " + err)
+    #How to lazy format?
+    logging.info("Parsing error string: %s", err)
+    response = ""
     match err:
-        case "E15": return err + ": Sensor slow to respond"
-        case "E16": return err + ": Too much target reflectance"
-        case "E17": return err + ": Too much ambient light"
-        case "E18": return err + ": DX mode: Measured greater than specified range"
-        case "E19": return err + ": DX mode: Target speed > 10m/s"
-        case "E23": return err + ": Temp below 14F"
-        case "E24": return err + ": Temp above 140F"
-        case "E31": return err + ": Faulty memory hardware, EEPROM error"
-        case "E51": return err + ": High ambient light or hardware error"
-        case "E52": return err + ": Faulty laser diode"
-        case "E53": return err + ": EEPROM parameter not set (or divide by zero error)"
-        case "E54": return err + ": Hardware error (PLL)"
-        case "E55": return err + ": Hardware error"
-        case "E61": return err + ": Invalid serial command"
-        case "E62": return err + ": Hardware error or Parity error in serial settings"
-        case "E63": return err + ": SIO Overflow"
-        case "E64": return err + ": Framing - error SIO"
-        case "LO": return err + ": Laser is on"
-        case "LF": return err + ": Laser is off"
-        case '': return "No response from laser."
+        case "E15": response = err + ": Sensor slow to respond"
+        case "E16": response = err + ": Too much target reflectance"
+        case "E17": response = err + ": Too much ambient light"
+        case "E18": response = err + ": DX mode: Measured greater than specified range"
+        case "E19": response = err + ": DX mode: Target speed > 10m/s"
+        case "E23": response = err + ": Temp below 14F"
+        case "E24": response = err + ": Temp above 140F"
+        case "E31": response = err + ": Faulty memory hardware, EEPROM error"
+        case "E51": response = err + ": High ambient light or hardware error"
+        case "E52": response = err + ": Faulty laser diode"
+        case "E53": response = err + ": EEPROM parameter not set (or divide by zero error)"
+        case "E54": response = err + ": Hardware error (PLL)"
+        case "E55": response = err + ": Hardware error"
+        case "E61": response = err + ": Invalid serial command"
+        case "E62": response = err + ": Hardware error or Parity error in serial settings"
+        case "E63": response = err + ": SIO Overflow"
+        case "E64": response = err + ": Framing - error SIO"
+        case "LO": response = err + ": Laser is on"
+        case "LF": response = err + ": Laser is off"
+        case '': response = "No response from laser."
 
     #Either return nothing or a generic error, depending on how I want to handle it in the GUI
-    return ""
+    return response
 
 #Send ZPL code to the default system printer along with the data to print.
 def send_print_label(is_enabled: str, order_length: float, table_length: float,
                       tolerance: float, offset: float, work_order: str):
     #https://timgolden.me.uk/python/win32_how_do_i/print.htm
     if is_enabled == "normal":
-        print(strftime('%G-%m-%d %H:%M:%S') + " Printing Label...")
+        logging.info("Printing Label...")
         
         raw_label = "^XA"
         raw_label += "^CFA,20"
@@ -91,27 +99,27 @@ def send_print_label(is_enabled: str, order_length: float, table_length: float,
 
         ##Turn this into a formatted string and plop in our own data!
         label_bytes=bytes(raw_label, "utf-8")
-        print("Label Bytes: " + str(label_bytes))
+        #logging.info("Label Bytes: " + str(label_bytes))
         #The only flaw here is that the default printer must be selected in Windows.
         #TODO: add GUI option for printer selection
         default_printer = win32print.GetDefaultPrinter()
         my_printer = win32print.OpenPrinter(default_printer)
-        print("Default Printer: " + default_printer)
+        #logging.info("Default Printer: " + default_printer)
         try:
-            print("Starting print job...")
+            #print("Starting print job...")
             win32print.StartDocPrinter(my_printer, 1, ("label", None, "RAW"))
-            print("Starting page...")
+            #print("Starting page...")
             win32print.StartPagePrinter(my_printer)
-            print("Writing label bytes...")
+            #print("Writing label bytes...")
             win32print.WritePrinter(my_printer, label_bytes)
-            print("Ending page...")
+            #print("Ending page...")
             win32print.EndPagePrinter(my_printer)
-            print("Ending print job...")
+            #print("Ending print job...")
             win32print.EndDocPrinter(my_printer)
         except Exception as e:
-            print(f"Error printing label: {e}")
+            logging.error("Error printing label: %s", e)
         finally:
-            print(strftime('%G-%m-%d %H:%M:%S') + " Closing printer...")
+            logging.info("Closing printer...")
             win32print.ClosePrinter(my_printer)
 
 #Main class for the GUI
@@ -148,16 +156,16 @@ class MainMenu:
     btn_laser_reset: ttk.Button = None
 
     def clear(self):
-        print(strftime('%G-%m-%d %H:%M:%S') + " Clearing Barcodes...")
+        logging.info("Clearing Barcodes...")
         self.scanner_input = ""
         self.current_barcode = ""
         self.update()
 
-    #Call this once a bardcode has been detected or as the laser refreshes. Update the GUI with the new information.
+    #Call this once a bardcode has been detected or as the laser refreshes.
+    #Update the GUI with the new information.
     #Also run if error codes are detected.
     def update(self):
-        print(strftime('%G-%m-%d %H:%M:%S') +
-               f" Updating GUI. Barcode: {self.current_barcode}; Laser Length: {self.table_length}")
+        logging.info("Updating GUI. Barcode: %s; Laser Length: %f", self.current_barcode, self.table_length)
 
         self.order_str = "    "
         self.order_length = 0.0
@@ -170,15 +178,13 @@ class MainMenu:
             try:
                 self.order_length = round(float(self.current_barcode[4:]), 2)
             except ValueError:
-                print(strftime('%G-%m-%d %H:%M:%S')
-                       + f" ValueError: Could not convert {self.current_barcode[4:]} to float.")
+                logging.error("ValueError: Could not convert %s to float.", self.current_barcode[4:])
         elif(self.current_barcode is not None and len(self.current_barcode) > 0):
             #If we get here and the barcode isn't empty, it's probably a Line39 code.
             try:
                 self.order_length = round(float(self.current_barcode), 2)
             except ValueError:
-                print(strftime('%G-%m-%d %H:%M:%S')
-                       + f" ValueError: Could not convert {self.current_barcode} to float.")
+                logging.error(" ValueError: Could not convert %s to float.", self.current_barcode)
         else:
             #currentBarcode is empty or wrong format.
             self.order_str = "    "
@@ -224,44 +230,45 @@ class MainMenu:
         self.lbl_order_length_box.update()
         self.lbl_error_code.update()
 
-        print(f"Order Length: {self.order_length}, Order Number: {self.order_str}, Table Length: {self.table_length + self.laser_offset}, Off By: {self.off_by_val}")
+        logging.info("Order Length: %f, Order Number: %s, Table Length: %f, Off By: %f",
+                      self.order_length, self.order_str, self.table_length + self.laser_offset, self.off_by_val)
 
     #Send an off / on signal to the laser, or try to reconnect if it's not connected.
     def reset_laser(self):
         if (not self.laser_is_connected):
-            print("Laser not connected. Attempting to reconnect...")
+            logging.warning("Laser not connected. Attempting to reconnect...")
             if (self.laser_object is not None):
                 self.laser_object.close() #Close the serial port if it's open
             self.setup_laser()
             return
 
-        print(strftime('%G-%m-%d %H:%M:%S') + " Resetting Laser...")
+        logging.info("Resetting Laser...")
         ##Send a LF followed by LO after a short delay
         # Try using ascii("LF\n") to send the LF and LO commands if a string literal doesn't work.
         try:
-            print("Writing LF (laser off)")
+            logging.info("Writing LF (laser off)")
             self.laser_object.write(b'LF\r\n')
-            print("Checking laser response...")
+            logging.info("Checking laser response...")
             rl = str(self.laser_object.readline()).strip()
             self.laser_status = parse_laser_error(rl)
-            print(f"Laser response: {rl}")
+            logging.info("Laser response: %s", rl)
             time.sleep(1) #Wait for the laser to reset
             self.laser_object.flush()
-            print("Writing LO (laser on)")
+            logging.info("Writing LO (laser on)")
             self.laser_object.write(b'LO\r\n')
-            print("Checking laser response...")
+            logging.info("Checking laser response...")
             rl = str(self.laser_object.readline()).strip()
-            print(f"Laser response: {rl}")
+            logging.info("Laser response: %s", rl)
             self.laser_status = parse_laser_error(rl)
         except serial.SerialTimeoutException:
-            print("Laser reset timed out.")
+            logging.error("Laser reset timed out.")
             self.laser_status = "Laser offline."
             self.laser_is_connected = False
         except Exception as e:
             self.laser_status = "Unhandled exception. Restart program."
-            print(f"Unhandled Exception: {e}")
+            logging.error("Unhandled Exception: %s", e)
 
-        print("Flushing buffer...")
+        logging.info("Flushing buffer...")
         self.laser_object.flush() #Clear the input buffer to avoid reading old data
         self.update()
 
@@ -278,64 +285,64 @@ class MainMenu:
                 raise serial.SerialTimeoutException("No response from laser.")
 
             self.laser_status = "Laser connected on " + self.laser_port
-            print(strftime('%G-%m-%d %H:%M:%S') + " Laser connected!")
+            logging.info("Laser connected!")
             self.laser_is_connected = True
-        except serial.SerialException as e:
-            self.laser_status = "Laser not found on " + self.laser_port + " - check connection and configuration."
-            print(strftime('%G-%m-%d %H:%M:%S') + f" Serial exception: {e}")
         except serial.SerialTimeoutException:
             self.laser_status = "Laser connection on " + self.laser_port + " timed out."
-            print(strftime('%G-%m-%d %H:%M:%S') + f" Laser read timed out: {e}")
+            logging.error("Laser read timed out: %s", e)
+        except serial.SerialException as e:
+            self.laser_status = "Laser not found on " + self.laser_port + " - check connection and configuration."
+            logging.error("Serial exception: %s", e)
         except Exception as e:
             self.laser_status = "Unhandled exception. Restart program."
-            print(strftime('%G-%m-%d %H:%M:%S') + f" Unhandled Exception: {e}")
+            logging.error(" Unhandled Exception: %s", e)
 
-    def getLaserLength(self, root):
+    def get_laser_length(self, root):
         if (not self.laser_is_connected):
             self.laser_status = "Laser not connected."
-            print(strftime('%G-%m-%d %H:%M:%S') + " Laser not connected.")
+            logging.warning("Laser not connected.")
             #Note that this will prevent the getLaserLength function from running again.
             #Use the reset button to reconnect, then manually override with g to get it going again.
             #Hopefully that won't be necessary very often...or at all.
             return
         
-        print(strftime('%G-%m-%d %H:%M:%S') +" Getting laser length (DM)...")
+        logging.info("Getting laser length (DM)")
         #Consider using the more precise DS command instead of DM
         # Note that this is not instant, but is faster than DT, which can take up to 6 seconds.
         #Whatever I choose will need to take this timing into account
         # The laser currently has an ST of 0 (no limit).
         try:
             self.laser_object.write(b'DM\n') #Send the command to get the length
-            print(strftime('%G-%m-%d %H:%M:%S') + " Waiting for laser response...")
+            logging.info("Waiting for laser response...")
             time.sleep(0.5) #Wait for the laser to respond
             re = self.laser_object.readline()
-            print(strftime('%G-%m-%d %H:%M:%S') + f" Laser response: {re}")
+            logging.info("Laser response: %s", re)
             self.table_length = meters_to_inches(float(re.decode('utf-8').strip()))
         except serial.SerialTimeoutException:
-            print(strftime('%G-%m-%d %H:%M:%S') + " Laser read timed out.")
+            logging.error("Laser read timed out.")
             self.laser_status = "Laser offline."
             self.laser_is_connected = False
         except ValueError:
             self.laser_status = parse_laser_error(str(re).strip())
-            print(strftime('%G-%m-%d %H:%M:%S') +" Non-numeric value received from laser.")
+            logging.error("Non-numeric value received from laser.")
             self.table_length = 0.0
         except Exception as e:
             self.laser_status = "Unhandled exception. Restart program."
-            print(strftime('%G-%m-%d %H:%M:%S') + f" Unhandled Exception: {e}")
+            logging.error("Unhandled Exception: %s", e)
             self.table_length = 0.0
 
-        print("Flushing buffer...")
+        logging.info("Flushing buffer...")
         self.laser_object.flush() #Clear the input buffer to avoid reading old data
         self.update()
 
-        root.after(500, self.getLaserLength(root)) #Call this function again after 500ms
+        root.after(500, self.get_laser_length(root)) #Call this function again after 500ms
 
 
     #Deals with keyboard input from the barcode scanner.
     #Side effect of this is that it allows for manual input of the barcode scanner, which is actually a desired feature.
-    def captureInput(self, event):
+    def capture_input(self, event):
         if event.keysym == 'Return':
-            print(strftime('%G-%m-%d %H:%M:%S') + f" Received input: {self.scanner_input}")
+            logging.info("Received input: %s", self.scanner_input)
             self.current_barcode = self.scanner_input
             self.scanner_input = ""  # Clear the input after processing
             self.update()
@@ -343,6 +350,7 @@ class MainMenu:
             self.scanner_input += event.char  # Append the character to the input string
 
     def load_debug_vals(self):
+        logging.debug("Loading debug values")
         self.order_str = "DBUG"
         self.laser_offset = 0.42
         self.order_length = 128.0
@@ -359,17 +367,16 @@ class MainMenu:
             self.min_tolerance = c.getfloat('offsets', 'minTolerance')
             self.max_tolerance = c.getfloat('offsets', 'maxTolerance')
         except Exception as e:
-            print(strftime('%G-%m-%d %H:%M:%S') + f" Error reading config file: {e}")
-            print(strftime('%G-%m-%d %H:%M:%S') + " Using default values.")
+            logging.error("Error reading config file: %s", e)
+            logging.info("Using default config values.")
 
-        print(strftime('%G-%m-%d %H:%M:%S') + " Config file loaded.")
+        logging.info("Config file loaded.")
 
 
     def __init__(self, root: ttk.Tk):
-        print(strftime('%G-%m-%d %H:%M:%S') + " Loading config file...")
         self.read_config_file()
 
-        print(strftime('%G-%m-%d %H:%M:%S') + " Initializing GUI...")
+        logging.info("Initializing GUI...")
         #root is already initialized as ttk.Tk()
         root.resizable(True, True)
         root.title("WESPA 39-128")
@@ -385,18 +392,18 @@ class MainMenu:
         # Bind keyboard shortcuts; also detect barcode input
         root.bind('<x>', lambda event: self.clear())
         root.bind('<l>', lambda event: self.reset_laser())
-        root.bind('<g>', lambda event: self.getLaserLength(root))
+        root.bind('<g>', lambda event: self.get_laser_length(root))
         root.bind('<space>', lambda event: send_print_label(
             is_enabled=self.allow_print, order_length=self.order_length,
               table_length=self.table_length, offset=self.off_by_val,
                 tolerance=self.min_tolerance, work_order=self.order_str))
-        root.bind('<Key>', self.captureInput)
+        root.bind('<Key>', self.capture_input)
         
-        font_baseSize = 12
-        smallest_font = font.Font(size=font_baseSize)
-        small_bold_font = font.Font(size=font_baseSize+4, weight="bold")
-        medium_bold_font = font.Font(size=font_baseSize+8, weight="bold")
-        large_bold_font = font.Font(size=font_baseSize+16, weight="bold")
+        base_size = 12
+        smallest_font = font.Font(size=base_size)
+        small_bold_font = font.Font(size=base_size+4, weight="bold")
+        medium_bold_font = font.Font(size=base_size+8, weight="bold")
+        large_bold_font = font.Font(size=base_size+16, weight="bold")
         
         lbl_last_barcode = ttk.Label(root, text="Last Barcode Scanned:", justify="left", font=smallest_font)
         lbl_last_barcode.grid(column=0, row=0, padx=5, pady=5, sticky="nw")
@@ -470,9 +477,9 @@ class MainMenu:
         self.lbl_error_code = ttk.Label(root, text=self.laser_status, justify="left", font=smallest_font)
         self.lbl_error_code.grid(column=0, row=6, columnspan=3, padx=5, pady=5, sticky="w")
 
-        print(strftime('%G-%m-%d %H:%M:%S') + " GUI Initialized!")
+        logging.info("GUI Initialized!")
 
-        root.after(1000, self.getLaserLength(root))
+        root.after(1000, self.get_laser_length(root))
         
 
 root = ttk.Tk()
