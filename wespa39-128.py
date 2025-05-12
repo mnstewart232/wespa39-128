@@ -123,7 +123,7 @@ def send_print_label(is_enabled: str, order_length: float, table_length: float,
             win32print.ClosePrinter(my_printer)
 
 #Main class for the GUI
-class MainMenu:
+class MainMenu(ttk.Tk):
     scanner_input: str = "" #Barcode scanner input
     current_barcode: str = "" #Last barcode scanned - delimited by newlines with the scanner
     order_str: str = "" #First 4 digits of a line128 barcode
@@ -297,7 +297,7 @@ class MainMenu:
             self.laser_status = "Unhandled exception. Restart program."
             logging.error(" Unhandled Exception: %s", e)
 
-    def get_laser_length(self, root):
+    def get_laser_length(self):
         if not self.laser_is_connected:
             self.laser_status = "Laser not connected."
             logging.warning("Laser not connected.")
@@ -314,7 +314,7 @@ class MainMenu:
         try:
             self.laser_object.write(b'DM\n') #Send the command to get the length
             logging.info("Waiting for laser response...")
-            time.sleep(0.5) #Wait for the laser to respond
+            time.sleep(0.1) #Wait for the laser to respond
             re = self.laser_object.readline()
             logging.info("Laser response: %s", re)
             self.table_length = meters_to_inches(float(re.decode('utf-8').strip()))
@@ -335,7 +335,7 @@ class MainMenu:
         self.laser_object.flush() #Clear the input buffer to avoid reading old data
         self.update()
 
-        root.after(500, self.get_laser_length(root)) #Call this function again after 500ms
+        self.after(500, self.get_laser_length()) #Call this function again after 500ms
 
 
     #Deals with keyboard input from the barcode scanner.
@@ -377,42 +377,43 @@ class MainMenu:
         logging.warning("Closing serial port and program...")
         #This should prevent get_laser_length() from running again.
         self.laser_is_connected = False
-        #Add time.sleep(0.5) here to allow the laser to finish sending data before closing the port?
         try:
             self.laser_object.close() #Close the serial port if it's open
         except Exception as e:
             logging.error("Error closing serial port: %s", e)
 
-        root.destroy()
+        self.destroy()
 
 
-    def __init__(self, root: ttk.Tk):
+    def __init__(self, *args, **kwargs):
+        ttk.Tk.__init__(self, *args, **kwargs)
+
         self.read_config_file()
 
         logging.info("Initializing GUI...")
-        #root is already initialized as ttk.Tk()
-        root.resizable(True, True)
-        root.title("WESPA 39-128")
+        #self is already initialized as ttk.Tk()
+        self.resizable(True, True)
+        self.title("WESPA 39-128")
         
         #Number of columns and rows in the grid - all resize at the same rate
         for i in range(3):
-            root.columnconfigure(i, weight=1)
+            self.columnconfigure(i, weight=1)
         for i in range(7):
-            root.rowconfigure(i, weight=1)
+            self.rowconfigure(i, weight=1)
 
         #self.loadDebugVals()
 
         # Bind keyboard shortcuts; also detect barcode input
-        root.bind('<x>', lambda event: self.clear())
-        root.bind('<l>', lambda event: self.reset_laser())
-        root.bind('<g>', lambda event: self.get_laser_length(root))
-        root.bind('<space>', lambda event: send_print_label(
+        self.bind('<x>', lambda event: self.clear())
+        self.bind('<l>', lambda event: self.reset_laser())
+        self.bind('<g>', lambda event: self.get_laser_length(self))
+        self.bind('<space>', lambda event: send_print_label(
             is_enabled=self.allow_print, order_length=self.order_length,
               table_length=self.table_length, offset=self.off_by_val,
                 tolerance=self.min_tolerance, work_order=self.order_str))
-        root.bind('<Key>', self.capture_input)
+        self.bind('<Key>', self.capture_input)
          #Call on_exit() when the window is closed, for a more graceful shutdown.
-        root.protocol("WM_DELETE_WINDOW", self.on_exit)
+        self.protocol("WM_DELETE_WINDOW", self.on_exit)
         
         base_size = 12
         smallest_font = font.Font(size=base_size)
@@ -420,60 +421,60 @@ class MainMenu:
         medium_bold_font = font.Font(size=base_size+8, weight="bold")
         large_bold_font = font.Font(size=base_size+16, weight="bold")
         
-        lbl_last_barcode = ttk.Label(root, text="Last Barcode Scanned:", justify="left", font=smallest_font)
+        lbl_last_barcode = ttk.Label(self, text="Last Barcode Scanned:", justify="left", font=smallest_font)
         lbl_last_barcode.grid(column=0, row=0, padx=5, pady=5, sticky="nw")
 
         #WO number label
-        lbl_work_order = ttk.Label(root, text="Work Order: ", justify="left", font=small_bold_font)
+        lbl_work_order = ttk.Label(self, text="Work Order: ", justify="left", font=small_bold_font)
         lbl_work_order.grid(column=1, row=0, padx=5, pady=5, sticky="ne")
 
         #WO number textbox
-        self.lbl_order = ttk.Label(root, text=self.order_str, justify="left", font=small_bold_font)
+        self.lbl_order = ttk.Label(self, text=self.order_str, justify="left", font=small_bold_font)
         self.lbl_order.grid(column=2, row=0, padx=5, pady=5, sticky="nw")
         
         #Length label (last scanned)
-        lbl_length = ttk.Label(root, text="Length: ", justify="left", font=small_bold_font)
+        lbl_length = ttk.Label(self, text="Length: ", justify="left", font=small_bold_font)
         lbl_length.grid(column=1, row=1, padx=5, pady=5, sticky="ne")
 
         #Length textbox (last scanned)
-        self.lbl_length = ttk.Label(root, text=get_inches_str(self.order_length), justify="left", font=small_bold_font)
+        self.lbl_length = ttk.Label(self, text=get_inches_str(self.order_length), justify="left", font=small_bold_font)
         self.lbl_length.grid(column=2, row=1, padx=5, pady=5, sticky="nw")
 
         #Table Length label
-        lbl_table_length = ttk.Label(root, text="TABLE LENGTH:", justify="left", font=medium_bold_font)
+        lbl_table_length = ttk.Label(self, text="TABLE LENGTH:", justify="left", font=medium_bold_font)
         lbl_table_length.grid(column=0, row=2, padx=25, pady=5, sticky="nsew")
 
         #Table Length textbox
-        self.lbl_table_length_box = ttk.Label(root, text=get_inches_str(self.table_length), justify="center", background="white", relief="solid", font=medium_bold_font)
+        self.lbl_table_length_box = ttk.Label(self, text=get_inches_str(self.table_length), justify="center", background="white", relief="solid", font=medium_bold_font)
         self.lbl_table_length_box.grid(column=0, row=3, padx=5, pady=5, sticky="nsew")
 
         #OffBy Label
-        lbl_off_by = ttk.Label(root, text="OFF BY:", justify="center", font=medium_bold_font)
+        lbl_off_by = ttk.Label(self, text="OFF BY:", justify="center", font=medium_bold_font)
         lbl_off_by.grid(column=1, row=2, padx=25, pady=5, sticky="nsew")
 
         #OffBy Textbox
-        self.lbl_off_by_box = ttk.Label(root, text=get_inches_str(self.off_by_val), background="white", relief="solid", font=medium_bold_font)
+        self.lbl_off_by_box = ttk.Label(self, text=get_inches_str(self.off_by_val), background="white", relief="solid", font=medium_bold_font)
         self.lbl_off_by_box.grid(column=1, row=3, padx=5, pady=5, sticky="nsew")
 
         #Order Length Label
-        lbl_order_length = ttk.Label(root, text="ORDER LENGTH:", justify="left", font=medium_bold_font)
+        lbl_order_length = ttk.Label(self, text="ORDER LENGTH:", justify="left", font=medium_bold_font)
         lbl_order_length.grid(column=2, row=2, padx=25, pady=5, sticky="nsew")
 
         #Order Length Textbox
-        self.lbl_order_length_box = ttk.Label(root, text=get_inches_str(self.order_length), justify="right", background="white", relief="solid", font=medium_bold_font)
+        self.lbl_order_length_box = ttk.Label(self, text=get_inches_str(self.order_length), justify="right", background="white", relief="solid", font=medium_bold_font)
         self.lbl_order_length_box.grid(column=2, row=3, padx=5, pady=5, sticky="nsew")
 
         #Tolerance Indicator
-        self.lbl_tolerance_indicator = ttk.Label(root, text=self.tolerance_indicator, background=self.tolerance_color, font=large_bold_font)
+        self.lbl_tolerance_indicator = ttk.Label(self, text=self.tolerance_indicator, background=self.tolerance_color, font=large_bold_font)
         self.lbl_tolerance_indicator.grid(column=0, row=4, columnspan=3, padx=5, pady=5, sticky="nsew")
         
         #Clear button
-        btn_clear = ttk.Button(root, text="CLEAR\n(X)", font=medium_bold_font)
+        btn_clear = ttk.Button(self, text="CLEAR\n(X)", font=medium_bold_font)
         btn_clear.grid(column=0, row=5, padx=5, pady=5)
         btn_clear.bind('<Button-1>', lambda event: self.clear())
         
         #Print button
-        self.btn_print = ttk.Button(root, text="PRINT\n(space)", font=medium_bold_font)
+        self.btn_print = ttk.Button(self, text="PRINT\n(space)", font=medium_bold_font)
         self.btn_print.grid(column=1, row=5, padx=5, pady=5)
         self.btn_print.bind("<Button-1>", lambda event: send_print_label(
             is_enabled=self.allow_print, order_length=self.order_length,
@@ -482,21 +483,21 @@ class MainMenu:
         self.btn_print.configure(state=self.allow_print)
 
         #Reset/reconnect button
-        self.btn_laser_reset = ttk.Button(root, text="RESET LASER\n(L)", font=medium_bold_font)
+        self.btn_laser_reset = ttk.Button(self, text="RESET LASER\n(L)", font=medium_bold_font)
         self.btn_laser_reset.grid(column=2, row=5, padx=5, pady=5)
         self.btn_laser_reset.bind('<Button-1>', lambda event: self.reset_laser())
 
         self.setup_laser()
 
         #Laser status
-        self.lbl_error_code = ttk.Label(root, text=self.laser_status, justify="left", font=smallest_font)
+        self.lbl_error_code = ttk.Label(self, text=self.laser_status, justify="left", font=smallest_font)
         self.lbl_error_code.grid(column=0, row=6, columnspan=3, padx=5, pady=5, sticky="w")
 
         logging.info("GUI Initialized!")
 
-        root.after(1000, self.get_laser_length(root))
+        self.after(1000, self.get_laser_length())
         
 
-root = ttk.Tk()
-MainMenu(root)
-root.mainloop()
+if __name__== "__main__":
+    app = MainMenu()
+    app.mainloop()
