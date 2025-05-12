@@ -127,8 +127,7 @@ class MainMenu(ttk.Tk):
             label_bytes=bytes(raw_label, "utf-8")
             #logging.info("Label Bytes: " + str(label_bytes))
             #The only flaw here is that the default printer must be selected in Windows.
-            #TODO: add GUI option for printer selection
-            default_printer = win32print.GetDefaultPrinter()
+            default_printer = win32print.GetDefaultPrinterW()
             my_printer = win32print.OpenPrinter(default_printer)
             #logging.info("Default Printer: " + default_printer)
             try:
