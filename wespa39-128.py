@@ -1,6 +1,5 @@
 import math
 import logging
-import sys
 import time
 import tkinter as ttk
 from configparser import ConfigParser
@@ -35,94 +34,6 @@ import win32print
     #pyserial for COM IO
     #win32print for printer handling
 
-#No colons in the logfile name, just a yyyy-mm-dd hhmmss timestamp
-logging.basicConfig(filename=str(time.strftime('%Y-%m-%d %H%M%S') + ' wespa39-128.log'),
-                    level=logging.DEBUG,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S')
-
-#Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
-def get_inches_str(dec_inches: float):
-    feet = abs(math.trunc(dec_inches/12))
-    inches = format(abs(dec_inches) - feet * 12, '.2f')
-
-    if feet > 0:
-        return "{0} FT {1} IN".format(feet, inches)
-    else:
-        return "{0} IN".format(inches)
-    
-def meters_to_inches(meters: float):
-    return meters * 39.3701
-
-def parse_laser_error(err: str):
-    #How to lazy format?
-    logging.info("Parsing error string: %s", err)
-    response = ""
-    match err:
-        case "E15": response = err + ": Sensor slow to respond"
-        case "E16": response = err + ": Too much target reflectance"
-        case "E17": response = err + ": Too much ambient light"
-        case "E18": response = err + ": DX mode: Measured greater than specified range"
-        case "E19": response = err + ": DX mode: Target speed > 10m/s"
-        case "E23": response = err + ": Temp below 14F"
-        case "E24": response = err + ": Temp above 140F"
-        case "E31": response = err + ": Faulty memory hardware, EEPROM error"
-        case "E51": response = err + ": High ambient light or hardware error"
-        case "E52": response = err + ": Faulty laser diode"
-        case "E53": response = err + ": EEPROM parameter not set (or divide by zero error)"
-        case "E54": response = err + ": Hardware error (PLL)"
-        case "E55": response = err + ": Hardware error"
-        case "E61": response = err + ": Invalid serial command"
-        case "E62": response = err + ": Hardware error or Parity error in serial settings"
-        case "E63": response = err + ": SIO Overflow"
-        case "E64": response = err + ": Framing - error SIO"
-        case "LO": response = err + ": Laser is on"
-        case "LF": response = err + ": Laser is off"
-        case '': response = "No response from laser."
-
-    #Either return nothing or a generic error, depending on how I want to handle it in the GUI
-    return response
-
-#Send ZPL code to the default system printer along with the data to print.
-def send_print_label(is_enabled: str, order_length: float, table_length: float,
-                      tolerance: float, offset: float, work_order: str):
-    #https://timgolden.me.uk/python/win32_how_do_i/print.htm
-    if is_enabled == "normal":
-        logging.info("Printing Label...")
-        
-        raw_label = "^XA"
-        raw_label += "^CFA,20"
-        raw_label += "^FO0,90^FDWO#" + work_order + ":   " + get_inches_str(order_length) + "^FS"
-        raw_label += "^FO0,110^FDProduced:  " + get_inches_str(table_length) + "^FS"
-        raw_label += "^FO0,130^FDTolerance: " + get_inches_str(tolerance) + "^FS"
-        raw_label += "^FO0,150^FDOff by:    " + get_inches_str(offset) + "^FS"
-        raw_label += "^XZ"
-
-        ##Turn this into a formatted string and plop in our own data!
-        label_bytes=bytes(raw_label, "utf-8")
-        #logging.info("Label Bytes: " + str(label_bytes))
-        #The only flaw here is that the default printer must be selected in Windows.
-        #TODO: add GUI option for printer selection
-        default_printer = win32print.GetDefaultPrinter()
-        my_printer = win32print.OpenPrinter(default_printer)
-        #logging.info("Default Printer: " + default_printer)
-        try:
-            #print("Starting print job...")
-            win32print.StartDocPrinter(my_printer, 1, ("label", None, "RAW"))
-            #print("Starting page...")
-            win32print.StartPagePrinter(my_printer)
-            #print("Writing label bytes...")
-            win32print.WritePrinter(my_printer, label_bytes)
-            #print("Ending page...")
-            win32print.EndPagePrinter(my_printer)
-            #print("Ending print job...")
-            win32print.EndDocPrinter(my_printer)
-        except Exception as e:
-            logging.error("Error printing label: %s", e)
-        finally:
-            logging.info("Closing printer...")
-            win32print.ClosePrinter(my_printer)
-
 #Main class for the GUI
 class MainMenu(ttk.Tk):
     scanner_input: str = "" #Barcode scanner input
@@ -155,6 +66,87 @@ class MainMenu(ttk.Tk):
     
     btn_print: ttk.Button = None
     btn_laser_reset: ttk.Button = None
+
+    #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
+    def get_inches_str(self, dec_inches: float):
+        feet = abs(math.trunc(dec_inches/12))
+        inches = format(abs(dec_inches) - feet * 12, '.2f')
+
+        if feet > 0:
+            return "{0} FT {1} IN".format(feet, inches)
+        else:
+            return "{0} IN".format(inches)
+        
+    def meters_to_inches(self, meters: float):
+        return meters * 39.3701
+
+    def parse_laser_error(self, err: str):
+        logging.info("Parsing error string: %s", err)
+        response = ""
+        match err:
+            case "E15": response = err + ": Sensor slow to respond"
+            case "E16": response = err + ": Too much target reflectance"
+            case "E17": response = err + ": Too much ambient light"
+            case "E18": response = err + ": DX mode: Measured greater than specified range"
+            case "E19": response = err + ": DX mode: Target speed > 10m/s"
+            case "E23": response = err + ": Temp below 14F"
+            case "E24": response = err + ": Temp above 140F"
+            case "E31": response = err + ": Faulty memory hardware, EEPROM error"
+            case "E51": response = err + ": High ambient light or hardware error"
+            case "E52": response = err + ": Faulty laser diode"
+            case "E53": response = err + ": EEPROM parameter not set (or divide by zero error)"
+            case "E54": response = err + ": Hardware error (PLL)"
+            case "E55": response = err + ": Hardware error"
+            case "E61": response = err + ": Invalid serial command"
+            case "E62": response = err + ": Hardware error or Parity error in serial settings"
+            case "E63": response = err + ": SIO Overflow"
+            case "E64": response = err + ": Framing - error SIO"
+            case "LO": response = err + ": Laser is on"
+            case "LF": response = err + ": Laser is off"
+            case '': response = "No response from laser."
+
+        #Either return nothing or a generic error, depending on how I want to handle it in the GUI
+        return response
+
+    #Send ZPL code to the default system printer along with the data to print.
+    def send_print_label(self, is_enabled: str, order_length: float, table_length: float,
+                        tolerance: float, offset: float, work_order: str):
+        #https://timgolden.me.uk/python/win32_how_do_i/print.htm
+        if is_enabled == "normal":
+            logging.info("Printing Label...")
+            
+            raw_label = "^XA"
+            raw_label += "^CFA,20"
+            raw_label += "^FO0,90^FDWO#" + work_order + ":   " + self.get_inches_str(order_length) + "^FS"
+            raw_label += "^FO0,110^FDProduced:  " + self.get_inches_str(table_length) + "^FS"
+            raw_label += "^FO0,130^FDTolerance: " + self.get_inches_str(tolerance) + "^FS"
+            raw_label += "^FO0,150^FDOff by:    " + self.get_inches_str(offset) + "^FS"
+            raw_label += "^XZ"
+
+            ##Turn this into a formatted string and plop in our own data!
+            label_bytes=bytes(raw_label, "utf-8")
+            #logging.info("Label Bytes: " + str(label_bytes))
+            #The only flaw here is that the default printer must be selected in Windows.
+            #TODO: add GUI option for printer selection
+            default_printer = win32print.GetDefaultPrinter()
+            my_printer = win32print.OpenPrinter(default_printer)
+            #logging.info("Default Printer: " + default_printer)
+            try:
+                #print("Starting print job...")
+                win32print.StartDocPrinter(my_printer, 1, ("label", None, "RAW"))
+                #print("Starting page...")
+                win32print.StartPagePrinter(my_printer)
+                #print("Writing label bytes...")
+                win32print.WritePrinter(my_printer, label_bytes)
+                #print("Ending page...")
+                win32print.EndPagePrinter(my_printer)
+                #print("Ending print job...")
+                win32print.EndDocPrinter(my_printer)
+            except Exception as e:
+                logging.error("Error printing label: %s", e)
+            finally:
+                logging.info("Closing printer...")
+                win32print.ClosePrinter(my_printer)
 
     def clear(self):
         logging.info("Clearing Barcodes...")
@@ -214,12 +206,12 @@ class MainMenu(ttk.Tk):
             self.allow_print = "disabled"
 
         self.lbl_order.config(text=self.order_str)
-        self.lbl_length.config(text=get_inches_str(self.order_length))
+        self.lbl_length.config(text=self.get_inches_str(self.order_length))
         self.lbl_tolerance_indicator.config(text=self.tolerance_indicator, background=self.tolerance_color)
         self.btn_print.configure(state=self.allow_print)
-        self.lbl_table_length_box.config(text=get_inches_str(self.table_length + self.laser_offset))
-        self.lbl_off_by_box.config(text=get_inches_str(self.off_by_val))
-        self.lbl_order_length_box.config(text=get_inches_str(self.order_length + self.laser_offset))
+        self.lbl_table_length_box.config(text=self.get_inches_str(self.table_length + self.laser_offset))
+        self.lbl_off_by_box.config(text=self.get_inches_str(self.off_by_val))
+        self.lbl_order_length_box.config(text=self.get_inches_str(self.order_length + self.laser_offset))
         self.lbl_error_code.config(text=self.laser_status)
 
         self.lbl_order.update()
@@ -251,7 +243,7 @@ class MainMenu(ttk.Tk):
             self.laser_object.write(b'LF\r\n')
             logging.info("Checking laser response...")
             rl = str(self.laser_object.readline()).strip()
-            self.laser_status = parse_laser_error(rl)
+            self.laser_status = self.parse_laser_error(rl)
             logging.info("Laser response: %s", rl)
             time.sleep(1) #Wait for the laser to reset
             self.laser_object.flush()
@@ -260,7 +252,7 @@ class MainMenu(ttk.Tk):
             logging.info("Checking laser response...")
             rl = str(self.laser_object.readline()).strip()
             logging.info("Laser response: %s", rl)
-            self.laser_status = parse_laser_error(rl)
+            self.laser_status = self.parse_laser_error(rl)
         except serial.SerialTimeoutException as e:
             logging.error("Laser reset timed out: %s", e)
             self.laser_status = "Laser offline."
@@ -318,13 +310,13 @@ class MainMenu(ttk.Tk):
             time.sleep(0.25) #Wait for the laser to respond
             re = self.laser_object.readline()
             logging.info("Laser response: %s", re)
-            self.table_length = meters_to_inches(float(re.decode('utf-8').strip()))
+            self.table_length = self.meters_to_inches(float(re.decode('utf-8').strip()))
         except serial.SerialTimeoutException:
             logging.error("Laser read timed out.")
             self.laser_status = "Laser offline."
             self.laser_is_connected = False
         except ValueError:
-            self.laser_status = parse_laser_error(str(re).strip())
+            self.laser_status = self.parse_laser_error(str(re).strip())
             logging.error("Non-numeric value received from laser.")
             self.table_length = 0.0
         except Exception as e:
@@ -367,6 +359,15 @@ class MainMenu(ttk.Tk):
             self.laser_offset = c.getfloat('offsets', 'laserOffset')
             self.min_tolerance = c.getfloat('offsets', 'minTolerance')
             self.max_tolerance = c.getfloat('offsets', 'maxTolerance')
+
+            if(c.getboolean('debug', 'enableLogging')):
+                level = c.getint('debug', 'loggingLevel')
+                #No colons in the logfile name, just a yyyy-mm-dd hhmmss timestamp
+                logging.basicConfig(filename=str(time.strftime('%Y-%m-%d %H%M%S') + ' wespa39-128.log'),
+                    level=level,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
+
         except Exception as e:
             logging.error("Error reading config file: %s", e)
             logging.info("Using default config values.")
@@ -408,7 +409,7 @@ class MainMenu(ttk.Tk):
         self.bind('<x>', lambda event: self.clear())
         self.bind('<l>', lambda event: self.reset_laser())
         self.bind('<g>', lambda event: self.get_laser_length(self))
-        self.bind('<space>', lambda event: send_print_label(
+        self.bind('<space>', lambda event: self.send_print_label(
             is_enabled=self.allow_print, order_length=self.order_length,
               table_length=self.table_length, offset=self.off_by_val,
                 tolerance=self.min_tolerance, work_order=self.order_str))
@@ -438,7 +439,7 @@ class MainMenu(ttk.Tk):
         lbl_length.grid(column=1, row=1, padx=5, pady=5, sticky="ne")
 
         #Length textbox (last scanned)
-        self.lbl_length = ttk.Label(self, text=get_inches_str(self.order_length), justify="left", font=small_bold_font)
+        self.lbl_length = ttk.Label(self, text=self.get_inches_str(self.order_length), justify="left", font=small_bold_font)
         self.lbl_length.grid(column=2, row=1, padx=5, pady=5, sticky="nw")
 
         #Table Length label
@@ -446,7 +447,7 @@ class MainMenu(ttk.Tk):
         lbl_table_length.grid(column=0, row=2, padx=25, pady=5, sticky="nsew")
 
         #Table Length textbox
-        self.lbl_table_length_box = ttk.Label(self, text=get_inches_str(self.table_length), justify="center", background="white", relief="solid", font=medium_bold_font)
+        self.lbl_table_length_box = ttk.Label(self, text=self.get_inches_str(self.table_length), justify="center", background="white", relief="solid", font=medium_bold_font)
         self.lbl_table_length_box.grid(column=0, row=3, padx=5, pady=5, sticky="nsew")
 
         #OffBy Label
@@ -454,7 +455,7 @@ class MainMenu(ttk.Tk):
         lbl_off_by.grid(column=1, row=2, padx=25, pady=5, sticky="nsew")
 
         #OffBy Textbox
-        self.lbl_off_by_box = ttk.Label(self, text=get_inches_str(self.off_by_val), background="white", relief="solid", font=medium_bold_font)
+        self.lbl_off_by_box = ttk.Label(self, text=self.get_inches_str(self.off_by_val), background="white", relief="solid", font=medium_bold_font)
         self.lbl_off_by_box.grid(column=1, row=3, padx=5, pady=5, sticky="nsew")
 
         #Order Length Label
@@ -462,7 +463,7 @@ class MainMenu(ttk.Tk):
         lbl_order_length.grid(column=2, row=2, padx=25, pady=5, sticky="nsew")
 
         #Order Length Textbox
-        self.lbl_order_length_box = ttk.Label(self, text=get_inches_str(self.order_length), justify="right", background="white", relief="solid", font=medium_bold_font)
+        self.lbl_order_length_box = ttk.Label(self, text=self.get_inches_str(self.order_length), justify="right", background="white", relief="solid", font=medium_bold_font)
         self.lbl_order_length_box.grid(column=2, row=3, padx=5, pady=5, sticky="nsew")
 
         #Tolerance Indicator
@@ -477,7 +478,7 @@ class MainMenu(ttk.Tk):
         #Print button
         self.btn_print = ttk.Button(self, text="PRINT\n(space)", font=medium_bold_font)
         self.btn_print.grid(column=1, row=5, padx=5, pady=5)
-        self.btn_print.bind("<Button-1>", lambda event: send_print_label(
+        self.btn_print.bind("<Button-1>", lambda event: self.send_print_label(
             is_enabled=self.allow_print, order_length=self.order_length,
               table_length=self.table_length, offset=self.off_by_val,
                 tolerance=self.min_tolerance, work_order=self.order_str))
