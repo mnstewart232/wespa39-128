@@ -1,5 +1,6 @@
 import math
 import logging
+import sys
 import time
 import tkinter as ttk
 from configparser import ConfigParser
@@ -314,7 +315,7 @@ class MainMenu(ttk.Tk):
         try:
             self.laser_object.write(b'DM\n') #Send the command to get the length
             logging.info("Waiting for laser response...")
-            time.sleep(0.1) #Wait for the laser to respond
+            time.sleep(0.25) #Wait for the laser to respond
             re = self.laser_object.readline()
             logging.info("Laser response: %s", re)
             self.table_length = meters_to_inches(float(re.decode('utf-8').strip()))
@@ -335,7 +336,7 @@ class MainMenu(ttk.Tk):
         self.laser_object.flush() #Clear the input buffer to avoid reading old data
         self.update()
 
-        self.after(500, self.get_laser_length()) #Call this function again after 500ms
+        self.after(500, self.get_laser_length) #Call this function again after 500ms
 
 
     #Deals with keyboard input from the barcode scanner.
@@ -495,7 +496,7 @@ class MainMenu(ttk.Tk):
 
         logging.info("GUI Initialized!")
 
-        self.after(1000, self.get_laser_length())
+        self.after(1000, self.get_laser_length)
         
 
 if __name__== "__main__":
