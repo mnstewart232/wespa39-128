@@ -52,20 +52,20 @@ class MainMenu(ttk.Tk):
     print_text: str = "Cut To Length"
     laser_status: str = ""
     
-    laser_object: serial.Serial #Gets initialized in setupLaser()
+    laser_object: serial.Serial = serial.Serial() #Gets initialized in setupLaser()
     laser_is_connected: bool = False #True if the laser is connected, false if not.
     laser_port: str = "COM3" #Fill this in from config file
 
-    lbl_order: ttk.Label
-    lbl_length: ttk.Label
-    lbl_tolerance_indicator: ttk.Label
-    lbl_table_length_box: ttk.Label
-    lbl_off_by_box: ttk.Label
-    lbl_order_length_box: ttk.Label
-    lbl_error_code: ttk.Label
+    lbl_order: ttk.Label = ttk.Label()
+    lbl_length: ttk.Label = ttk.Label()
+    lbl_tolerance_indicator: ttk.Label = ttk.Label()
+    lbl_table_length_box: ttk.Label = ttk.Label()
+    lbl_off_by_box: ttk.Label = ttk.Label()
+    lbl_order_length_box: ttk.Label = ttk.Label()
+    lbl_error_code: ttk.Label = ttk.Label()
     
-    btn_print: ttk.Button
-    btn_laser_reset: ttk.Button
+    btn_print: ttk.Button = ttk.Button()
+    btn_laser_reset: ttk.Button = ttk.Button()
 
     #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
     def get_inches_str(self, dec_inches: float):
