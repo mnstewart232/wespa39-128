@@ -2,11 +2,11 @@ import math
 import logging
 import time
 import tkinter as ttk
-from configparser import ConfigParser
-from tkinter import font
-
 import serial
 import win32print
+
+from configparser import ConfigParser
+from tkinter import font
 
 #Major parts of the program:
 #Inputs:
@@ -52,20 +52,20 @@ class MainMenu(ttk.Tk):
     print_text: str = "Cut To Length"
     laser_status: str = ""
     
-    laser_object: serial.Serial = None #Gets initialized in setupLaser()
+    laser_object: serial.Serial #Gets initialized in setupLaser()
     laser_is_connected: bool = False #True if the laser is connected, false if not.
     laser_port: str = "COM3" #Fill this in from config file
 
-    lbl_order: ttk.Label = None
-    lbl_length: ttk.Label = None
-    lbl_tolerance_indicator: ttk.Label = None
-    lbl_table_length_box: ttk.Label = None
-    lbl_off_by_box: ttk.Label = None
-    lbl_order_length_box: ttk.Label = None
-    lbl_error_code: ttk.Label = None
+    lbl_order: ttk.Label
+    lbl_length: ttk.Label
+    lbl_tolerance_indicator: ttk.Label
+    lbl_table_length_box: ttk.Label
+    lbl_off_by_box: ttk.Label
+    lbl_order_length_box: ttk.Label
+    lbl_error_code: ttk.Label
     
-    btn_print: ttk.Button = None
-    btn_laser_reset: ttk.Button = None
+    btn_print: ttk.Button
+    btn_laser_reset: ttk.Button
 
     #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
     def get_inches_str(self, dec_inches: float):
@@ -114,10 +114,11 @@ class MainMenu(ttk.Tk):
         #https://timgolden.me.uk/python/win32_how_do_i/print.htm
         if is_enabled == "normal":
             logging.info("Printing Label...")
+            ol_string = self.get_inches_str(order_length)
             
             raw_label = "^XA"
             raw_label += "^CFA,20"
-            raw_label += "^FO0,90^FDWO#" + work_order + ":   " + self.get_inches_str(order_length) + "^FS"
+            raw_label += "^FO0,90^FDWO#" + work_order + ":   " + ol_string + "^FS"
             raw_label += "^FO0,110^FDProduced:  " + self.get_inches_str(table_length) + "^FS"
             raw_label += "^FO0,130^FDTolerance: " + self.get_inches_str(tolerance) + "^FS"
             raw_label += "^FO0,150^FDOff by:    " + self.get_inches_str(offset) + "^FS"
@@ -126,13 +127,14 @@ class MainMenu(ttk.Tk):
             ##Turn this into a formatted string and plop in our own data!
             label_bytes=bytes(raw_label, "utf-8")
             #logging.info("Label Bytes: " + str(label_bytes))
-            #The only flaw here is that the default printer must be selected in Windows.
+            #The only catch here is that the label printer must be selected as system default.
             default_printer = win32print.GetDefaultPrinterW()
             my_printer = win32print.OpenPrinter(default_printer)
             #logging.info("Default Printer: " + default_printer)
             try:
                 #print("Starting print job...")
-                win32print.StartDocPrinter(my_printer, 1, ("label", None, "RAW"))
+                #Per win32print documentation, arg 2 must be None to print to a printer.
+                win32print.StartDocPrinter(my_printer, 1, ("Label" + ol_string, None, "RAW")) # type: ignore
                 #print("Starting page...")
                 win32print.StartPagePrinter(my_printer)
                 #print("Writing label bytes...")
@@ -210,7 +212,7 @@ class MainMenu(ttk.Tk):
         self.btn_print.configure(state=self.allow_print)
         self.lbl_table_length_box.config(text=self.get_inches_str(self.table_length + self.laser_offset))
         self.lbl_off_by_box.config(text=self.get_inches_str(self.off_by_val))
-        self.lbl_order_length_box.config(text=self.get_inches_str(self.order_length + self.laser_offset))
+        self.lbl_order_length_box.config(text=self.get_inches_str(self.order_length))
         self.lbl_error_code.config(text=self.laser_status)
 
         self.lbl_order.update()
@@ -303,6 +305,7 @@ class MainMenu(ttk.Tk):
         # Note that this is not instant, but is faster than DT, which can take up to 6 seconds.
         #Whatever I choose will need to take this timing into account
         # The laser currently has an ST of 0 (no limit).
+        re = ""
         try:
             self.laser_object.write(b'DM\n') #Send the command to get the length
             logging.info("Waiting for laser response...")
@@ -394,7 +397,7 @@ class MainMenu(ttk.Tk):
         logging.info("Initializing GUI...")
         #self is already initialized as ttk.Tk()
         self.resizable(True, True)
-        self.title("WESPA 39-128")
+        self.title("WESPA 39-128 v1.1")
         
         #Number of columns and rows in the grid - all resize at the same rate
         for i in range(3):
@@ -405,15 +408,17 @@ class MainMenu(ttk.Tk):
         #self.loadDebugVals()
 
         # Bind keyboard shortcuts; also detect barcode input
-        self.bind('<x>', lambda event: self.clear())
-        self.bind('<l>', lambda event: self.reset_laser())
-        self.bind('<g>', lambda event: self.get_laser_length(self))
-        self.bind('<space>', lambda event: self.send_print_label(
+        self.bind('<x>', self.clear())
+        self.bind('<l>', self.reset_laser())
+        self.bind('<g>', self.get_laser_length())
+        self.bind('<space>', self.send_print_label(
             is_enabled=self.allow_print, order_length=self.order_length,
               table_length=self.table_length, offset=self.off_by_val,
                 tolerance=self.min_tolerance, work_order=self.order_str))
+        #All other keys need to be captured for the barcode scanner, which is keyboard-like input.
         self.bind('<Key>', self.capture_input)
-         #Call on_exit() when the window is closed, for a more graceful shutdown.
+
+        #Call on_exit() when the window is closed, for a more graceful shutdown.
         self.protocol("WM_DELETE_WINDOW", self.on_exit)
         
         base_size = 12
@@ -481,7 +486,7 @@ class MainMenu(ttk.Tk):
             is_enabled=self.allow_print, order_length=self.order_length,
               table_length=self.table_length, offset=self.off_by_val,
                 tolerance=self.min_tolerance, work_order=self.order_str))
-        self.btn_print.configure(state=self.allow_print)
+        self.btn_print.configure(state="disabled" if self.allow_print == "disabled" else "normal")
 
         #Reset/reconnect button
         self.btn_laser_reset = ttk.Button(self, text="RESET LASER\n(L)", font=medium_bold_font)

@@ -7,3 +7,6 @@ Build with
 Make sure that the label printer is set as the system default in order for the program to work.
 
 Make sure the .ini and .exe files are in the same directory. Log files (if enabled) will save to this directory as well.
+
+Version 1.1 update 2026-06-30:
+Fixed bug with Order Length textbox incorrectly displaying laser offset value. Tolerance was not affected, previous measurements were correct.
