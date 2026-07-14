@@ -407,7 +407,7 @@ class MainMenu(ttk.Tk):
         logging.info("Initializing GUI...")
         #self is already initialized as ttk.Tk()
         self.resizable(True, True)
-        self.title("WESPA 39-128 v1.1")
+        self.title("WESPA 39-128 v1.2")
         
         #Number of columns and rows in the grid - all resize at the same rate
         for i in range(3):
