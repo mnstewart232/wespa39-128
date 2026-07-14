@@ -1,5 +1,7 @@
 import math
 import logging
+import os
+import sys
 import time
 import tkinter as ttk
 import serial
@@ -56,16 +58,16 @@ class MainMenu(ttk.Tk):
     laser_is_connected: bool = False #True if the laser is connected, false if not.
     laser_port: str = "COM3" #Fill this in from config file
 
-    lbl_order: ttk.Label = ttk.Label()
-    lbl_length: ttk.Label = ttk.Label()
-    lbl_tolerance_indicator: ttk.Label = ttk.Label()
-    lbl_table_length_box: ttk.Label = ttk.Label()
-    lbl_off_by_box: ttk.Label = ttk.Label()
-    lbl_order_length_box: ttk.Label = ttk.Label()
-    lbl_error_code: ttk.Label = ttk.Label()
+    lbl_order: ttk.Label
+    lbl_length: ttk.Label
+    lbl_tolerance_indicator: ttk.Label
+    lbl_table_length_box: ttk.Label
+    lbl_off_by_box: ttk.Label
+    lbl_order_length_box: ttk.Label
+    lbl_error_code: ttk.Label
     
-    btn_print: ttk.Button = ttk.Button()
-    btn_laser_reset: ttk.Button = ttk.Button()
+    btn_print: ttk.Button
+    btn_laser_reset: ttk.Button
 
     #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
     def get_inches_str(self, dec_inches: float):
@@ -356,19 +358,27 @@ class MainMenu(ttk.Tk):
     def read_config_file(self):
         c = ConfigParser()
         try:
-            c.read('wespa39-128.ini')
+            # Resolve config file path relative to the exe (or script) location
+            if getattr(sys, 'frozen', False):
+                base_dir = os.path.dirname(sys.executable)
+            else:
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(base_dir, 'wespa39-128.ini')
+
+            # Set up logging first so config read errors are captured
+            c.read(config_path)
+            if c.has_option('debug', 'enableLogging') and c.getboolean('debug', 'enableLogging'):
+                level = c.getint('debug', 'loggingLevel')
+                #No colons in the logfile name, just a yyyy-mm-dd hhmmss timestamp
+                logging.basicConfig(filename=os.path.join(base_dir, time.strftime('%Y-%m-%d %H%M%S') + ' wespa39-128.log'),
+                    level=level,
+                    format='%(asctime)s [%(levelname)s] %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S')
+
             self.laser_port = c.get('ports', 'laserComPort')
             self.laser_offset = c.getfloat('offsets', 'laserOffset')
             self.min_tolerance = c.getfloat('offsets', 'minTolerance')
             self.max_tolerance = c.getfloat('offsets', 'maxTolerance')
-
-            if(c.getboolean('debug', 'enableLogging')):
-                level = c.getint('debug', 'loggingLevel')
-                #No colons in the logfile name, just a yyyy-mm-dd hhmmss timestamp
-                logging.basicConfig(filename=str(time.strftime('%Y-%m-%d %H%M%S') + ' wespa39-128.log'),
-                    level=level,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S')
 
         except Exception as e:
             logging.error("Error reading config file: %s", e)
@@ -408,10 +418,10 @@ class MainMenu(ttk.Tk):
         #self.loadDebugVals()
 
         # Bind keyboard shortcuts; also detect barcode input
-        self.bind('<x>', self.clear())
-        self.bind('<l>', self.reset_laser())
-        self.bind('<g>', self.get_laser_length())
-        self.bind('<space>', self.send_print_label(
+        self.bind('<x>', lambda event: self.clear())
+        self.bind('<l>', lambda event: self.reset_laser())
+        self.bind('<g>', lambda event: self.get_laser_length())
+        self.bind('<space>', lambda event: self.send_print_label(
             is_enabled=self.allow_print, order_length=self.order_length,
               table_length=self.table_length, offset=self.off_by_val,
                 tolerance=self.min_tolerance, work_order=self.order_str))
