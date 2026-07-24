@@ -42,9 +42,10 @@ class MainMenu(ttk.Tk):
     current_barcode: str = "" #Last barcode scanned - delimited by newlines with the scanner
     order_str: str = "" #First 4 digits of a line128 barcode
     order_length: float = 0.0 #line39 code, or the remaining digits of a line128
-    table_length: float = 0.0 #Fill this in from laser scanner
-    off_by_val: float = 0.0
-    laser_offset: float = 0.0 #Fill this in from config file
+    laser_length: float = 0.0 #Raw measurement from laser scanner
+    order_difference: float = 0.0 #Laser Length + Laser Offset - Order Length
+    laser_offset: float = 0.0 #Fill this in from config file; adjusts laser length
+    adjusted_length: float = 0.0 #Laser Length + Laser Offset
     min_tolerance: float = 0.1 #Fill this in from config file
     max_tolerance: float = 6.0 #Fill this in from config file
     tolerance_indicator: str = "Outside Tolerance"
@@ -73,11 +74,12 @@ class MainMenu(ttk.Tk):
     def get_inches_str(self, dec_inches: float):
         feet = abs(math.trunc(dec_inches/12))
         inches = format(abs(dec_inches) - feet * 12, '.2f')
+        neg_sign = "-" if dec_inches < 0 else ""
 
         if feet > 0:
-            return "{0} FT {1} IN".format(feet, inches)
+            return "{0}{1} FT {2} IN".format(neg_sign, feet, inches)
         else:
-            return "{0} IN".format(inches)
+            return "{0}{1} IN".format(neg_sign, inches)
         
     def meters_to_inches(self, meters: float):
         return meters * 39.3701
@@ -111,19 +113,18 @@ class MainMenu(ttk.Tk):
         return response
 
     #Send ZPL code to the default system printer along with the data to print.
-    def send_print_label(self, is_enabled: str, order_length: float, table_length: float,
-                        tolerance: float, offset: float, work_order: str):
+    def send_print_label(self):       
         #https://timgolden.me.uk/python/win32_how_do_i/print.htm
-        if is_enabled == "normal":
+        if self.allow_print == "normal":
             logging.info("Printing Label...")
-            ol_string = self.get_inches_str(order_length)
+            ol_string = self.get_inches_str(self.order_length)
             
             raw_label = "^XA"
             raw_label += "^CFA,20"
-            raw_label += "^FO0,90^FDWO#" + work_order + ":   " + ol_string + "^FS"
-            raw_label += "^FO0,110^FDProduced:  " + self.get_inches_str(table_length) + "^FS"
-            raw_label += "^FO0,130^FDTolerance: " + self.get_inches_str(tolerance) + "^FS"
-            raw_label += "^FO0,150^FDOff by:    " + self.get_inches_str(offset) + "^FS"
+            raw_label += "^FO0,90^FDWO#" + self.order_str + ":   " + ol_string + "^FS"
+            raw_label += "^FO0,110^FDProduced:  " + self.get_inches_str(self.adjusted_length) + "^FS"
+            raw_label += "^FO0,130^FDTolerance: " + self.get_inches_str(self.min_tolerance) + "^FS"
+            raw_label += "^FO0,150^FDOff by:    " + self.get_inches_str(self.order_difference) + "^FS"
             raw_label += "^XZ"
 
             ##Turn this into a formatted string and plop in our own data!
@@ -161,7 +162,7 @@ class MainMenu(ttk.Tk):
     #Update the GUI with the new information.
     #Also run if error codes are detected.
     def update(self):
-        logging.info("Updating GUI. Barcode: %s; Laser Length: %f", self.current_barcode, self.table_length)
+        logging.info("Updating GUI. Barcode: %s; Laser Length: %f", self.current_barcode, self.laser_length)
 
         self.order_str = "    "
         self.order_length = 0.0
@@ -186,20 +187,21 @@ class MainMenu(ttk.Tk):
             self.order_str = "    "
             self.order_length = 0.0
 
-        self.off_by_val = abs((self.table_length + self.laser_offset) - self.order_length)
+        self.adjusted_length = self.laser_length + self.laser_offset
+        self.order_difference = self.adjusted_length - self.order_length
 
         tolerance_position: str = ""
-        if self.order_length < self.table_length + self.laser_offset:
+        if self.order_length < self.adjusted_length:
             tolerance_position = ": Too Long"
-        elif self.order_length > self.table_length + self.laser_offset:
+        elif self.order_length > self.adjusted_length:
             tolerance_position = ": Too Short"
 
         #Will change between green, yellow, and red based on tolerance, with text changing as well (Within/Near/Outside Tolerance)
-        if abs(self.off_by_val) <= self.min_tolerance and self.off_by_val >= 0:
+        if abs(self.order_difference) <= self.min_tolerance and self.order_difference >= 0:
             self.tolerance_indicator = "Within Tolerance"
             self.tolerance_color = "green"
             self.allow_print = "normal"
-        elif abs(self.off_by_val) <= self.max_tolerance and self.off_by_val > self.min_tolerance:
+        elif abs(self.order_difference) <= self.max_tolerance and self.order_difference > self.min_tolerance:
             self.tolerance_indicator = "Near Tolerance" + tolerance_position
             self.tolerance_color = "yellow"
             self.allow_print = "disabled"
@@ -212,8 +214,8 @@ class MainMenu(ttk.Tk):
         self.lbl_length.config(text=self.get_inches_str(self.order_length))
         self.lbl_tolerance_indicator.config(text=self.tolerance_indicator, background=self.tolerance_color)
         self.btn_print.configure(state=self.allow_print)
-        self.lbl_table_length_box.config(text=self.get_inches_str(self.table_length + self.laser_offset))
-        self.lbl_off_by_box.config(text=self.get_inches_str(self.off_by_val))
+        self.lbl_table_length_box.config(text=self.get_inches_str(self.adjusted_length))
+        self.lbl_off_by_box.config(text=self.get_inches_str(self.order_difference))
         self.lbl_order_length_box.config(text=self.get_inches_str(self.order_length))
         self.lbl_error_code.config(text=self.laser_status)
 
@@ -226,8 +228,8 @@ class MainMenu(ttk.Tk):
         self.lbl_order_length_box.update()
         self.lbl_error_code.update()
 
-        logging.info("Order Length: %f, Order Number: %s, Table Length: %f, Off By: %f",
-                      self.order_length, self.order_str, self.table_length + self.laser_offset, self.off_by_val)
+        logging.info("Order Length: %f, Order Number: %s, Raw Table Length: %f, Laser Offset: %f, Order Off By: %f",
+                      self.order_length, self.order_str, self.laser_length, self.laser_offset, self.order_difference)
 
     #Send an off / on signal to the laser, or try to reconnect if it's not connected.
     def reset_laser(self):
@@ -267,8 +269,6 @@ class MainMenu(ttk.Tk):
         logging.info("Flushing buffer...")
         self.laser_object.flush() #Clear the input buffer to avoid reading old data
         self.update()
-
-        #Call ReadLaserLength() here again since connection has been refreshed?
 
     # Run this after the GUI inits. Establish serial communication.
     def setup_laser(self):
@@ -314,7 +314,8 @@ class MainMenu(ttk.Tk):
             time.sleep(0.25) #Wait for the laser to respond
             re = self.laser_object.readline()
             logging.info("Laser response: %s", re)
-            self.table_length = self.meters_to_inches(float(re.decode('utf-8').strip()))
+            self.laser_length = self.meters_to_inches(float(re.decode('utf-8').strip()))
+            self.adjusted_length = self.laser_length + self.laser_offset
         except serial.SerialTimeoutException:
             logging.error("Laser read timed out.")
             self.laser_status = "Laser offline."
@@ -322,11 +323,11 @@ class MainMenu(ttk.Tk):
         except ValueError:
             self.laser_status = self.parse_laser_error(str(re).strip())
             logging.error("Non-numeric value received from laser.")
-            self.table_length = 0.0
+            self.laser_length = 0.0
         except Exception as e:
             self.laser_status = "Unhandled exception. Restart program."
             logging.error("Unhandled Exception: %s", e)
-            self.table_length = 0.0
+            self.laser_length = 0.0
 
         logging.info("Flushing buffer...")
         self.laser_object.flush() #Clear the input buffer to avoid reading old data
@@ -345,15 +346,6 @@ class MainMenu(ttk.Tk):
             self.update()
         elif (event.char >= '0' and event.char <= '9' or event.char == '.'):
             self.scanner_input += event.char  # Append the character to the input string
-
-    def load_debug_vals(self):
-        logging.debug("Loading debug values")
-        self.order_str = "DBUG"
-        self.laser_offset = 0.42
-        self.order_length = 128.0
-        self.table_length = 256.0
-        self.off_by_val = self.table_length + self.laser_offset - self.order_length
-
     
     def read_config_file(self):
         c = ConfigParser()
@@ -407,7 +399,7 @@ class MainMenu(ttk.Tk):
         logging.info("Initializing GUI...")
         #self is already initialized as ttk.Tk()
         self.resizable(True, True)
-        self.title("WESPA 39-128 v1.2")
+        self.title("WESPA 39-128 v1.3")
         
         #Number of columns and rows in the grid - all resize at the same rate
         for i in range(3):
@@ -421,10 +413,7 @@ class MainMenu(ttk.Tk):
         self.bind('<x>', lambda event: self.clear())
         self.bind('<l>', lambda event: self.reset_laser())
         self.bind('<g>', lambda event: self.get_laser_length())
-        self.bind('<space>', lambda event: self.send_print_label(
-            is_enabled=self.allow_print, order_length=self.order_length,
-              table_length=self.table_length, offset=self.off_by_val,
-                tolerance=self.min_tolerance, work_order=self.order_str))
+        self.bind('<space>', lambda event: self.send_print_label())
         #All other keys need to be captured for the barcode scanner, which is keyboard-like input.
         self.bind('<Key>', self.capture_input)
 
@@ -461,7 +450,7 @@ class MainMenu(ttk.Tk):
         lbl_table_length.grid(column=0, row=2, padx=25, pady=5, sticky="nsew")
 
         #Table Length textbox
-        self.lbl_table_length_box = ttk.Label(self, text=self.get_inches_str(self.table_length), justify="center", background="white", relief="solid", font=medium_bold_font)
+        self.lbl_table_length_box = ttk.Label(self, text=self.get_inches_str(self.adjusted_length), justify="center", background="white", relief="solid", font=medium_bold_font)
         self.lbl_table_length_box.grid(column=0, row=3, padx=5, pady=5, sticky="nsew")
 
         #OffBy Label
@@ -469,7 +458,7 @@ class MainMenu(ttk.Tk):
         lbl_off_by.grid(column=1, row=2, padx=25, pady=5, sticky="nsew")
 
         #OffBy Textbox
-        self.lbl_off_by_box = ttk.Label(self, text=self.get_inches_str(self.off_by_val), background="white", relief="solid", font=medium_bold_font)
+        self.lbl_off_by_box = ttk.Label(self, text=self.get_inches_str(self.order_difference), background="white", relief="solid", font=medium_bold_font)
         self.lbl_off_by_box.grid(column=1, row=3, padx=5, pady=5, sticky="nsew")
 
         #Order Length Label
@@ -492,10 +481,7 @@ class MainMenu(ttk.Tk):
         #Print button
         self.btn_print = ttk.Button(self, text="PRINT\n(space)", font=medium_bold_font)
         self.btn_print.grid(column=1, row=5, padx=5, pady=5)
-        self.btn_print.bind("<Button-1>", lambda event: self.send_print_label(
-            is_enabled=self.allow_print, order_length=self.order_length,
-              table_length=self.table_length, offset=self.off_by_val,
-                tolerance=self.min_tolerance, work_order=self.order_str))
+        self.btn_print.bind("<Button-1>", lambda event: self.send_print_label())
         self.btn_print.configure(state="disabled" if self.allow_print == "disabled" else "normal")
 
         #Reset/reconnect button
@@ -511,6 +497,7 @@ class MainMenu(ttk.Tk):
 
         logging.info("GUI Initialized!")
 
+        #Repeat running the get_laser_length function - lack of parentheses indicate a function pointer.
         self.after(1000, self.get_laser_length)
         
 
