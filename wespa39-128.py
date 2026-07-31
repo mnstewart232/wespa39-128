@@ -117,9 +117,10 @@ class MainMenu(ttk.Tk):
 
     #Takes a float (dec_inches) and returns string formatted as XXft YYin or YYin if no feet
     def get_inches_str(self, dec_inches: float):
-        feet = abs(round(dec_inches/12))
-        inches = abs(round(dec_inches - feet * 12, 2))
         neg_sign = "-" if dec_inches < 0 else ""
+        abs_dec_inches = abs(dec_inches)
+        feet = int(abs_dec_inches / 12)
+        inches = round(abs_dec_inches - (feet * 12), 2)
 
         if feet > 0:
             return "{0}{1} FT {2} IN".format(neg_sign, feet, inches)
@@ -442,7 +443,7 @@ class MainMenu(ttk.Tk):
         logging.info("Initializing GUI...")
         self.resizable(True, True)
         #Really should set this externally; just need to remember to update manually.
-        self.title("WESPA 39-128 v1.4")
+        self.title("WESPA 39-128 v1.4.1")
         
         #Number of columns and rows in the grid - all resize at the same rate
         for i in range(3):
